@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sarabun:wght@300;400;600&display=swap');
+:root{--bg:#0a0f1a;--panel:#111827;--border:#1e2d40;--text:#e2e8f0;--muted:#64748b;--accent:#38bdf8;--q1:#ff4d4f;--q2:#fa8c16;--q3:#1890ff;--q4:#00e676;--q5:#ffd600}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Sarabun',sans-serif;min-height:100vh;padding:20px}
+.mono{font-family:'Space Mono',monospace}
+h1{font-family:'Space Mono',monospace;font-size:1rem;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sub{color:var(--muted);font-size:.78rem;margin-bottom:16px;font-family:'Space Mono',monospace}
+.quality-legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.ql-item{display:flex;align-items:center;gap:5px;font-size:.68rem;font-family:'Space Mono',monospace;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:6px;padding:4px 10px}
+.ql-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;background:var(--panel);margin-bottom:24px}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(56,189,248,.05)}
+.upload-zone.loaded{border-color:var(--q4);border-style:solid}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-icon{font-size:2.2rem;margin-bottom:8px}
+.upload-label{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--muted);letter-spacing:.08em}
+.upload-name{font-family:'Space Mono',monospace;font-size:.78rem;color:var(--q4);margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.card-title{font-family:'Space Mono',monospace;font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px}
+.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px}
+@media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+.stat-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 6px;text-align:center}
+.stat-label{font-size:.6rem;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:4px}
+.stat-value{font-family:'Space Mono',monospace;font-size:1.05rem;font-weight:700}
+.stat-sub{font-size:.58rem;color:var(--muted);margin-top:2px}
+.bar-track{background:var(--bg);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border);display:flex;margin-bottom:6px}
+.bar-fill{height:100%;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-family:'Space Mono',monospace;font-weight:700;color:#000;transition:width .8s ease;overflow:hidden;white-space:nowrap}
+.bar-labels{display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:14px;flex-wrap:wrap;gap:4px}
+.leaflet-wrap{width:100%;height:340px;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:12px}
+.leaflet-map{width:100%;height:100%}
+.leaflet-tile{filter:brightness(.75) saturate(.6) hue-rotate(185deg)}
+.leaflet-container{background:#0a1020}
+.leaflet-popup-content-wrapper{background:#1e2d40!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px!important;box-shadow:0 4px 16px rgba(0,0,0,.5)!important;font-family:'Space Mono',monospace!important;font-size:.7rem!important}
+.leaflet-popup-tip{background:#1e2d40!important}
+.leaflet-popup-close-button{color:var(--muted)!important}
+.legend{display:flex;gap:12px;margin-bottom:10px;font-size:.72rem;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:5px}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.timeline{display:flex;gap:1px;height:14px;border-radius:5px;overflow:hidden;margin-bottom:4px}
+.timeline-label{font-size:.63rem;color:var(--muted);font-family:'Space Mono',monospace}
+.speed-wrap{position:relative;width:100%;height:160px;background:#050d18;border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:10px}
+canvas.speed-canvas{width:100%;height:100%;display:block}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:600px){.detail-grid{grid-template-columns:1fr}}
+.detail-table{width:100%;border-collapse:collapse}
+.detail-table td{padding:5px 3px;border-bottom:1px solid var(--border);font-size:.76rem}
+.detail-table td:first-child{color:var(--muted);font-family:'Space Mono',monospace;font-size:.66rem}
+.detail-table td:last-child{font-family:'Space Mono',monospace;text-align:right}
+.hidden{display:none}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-family:'Space Mono',monospace;font-size:.75rem}
+.empty-state .big{font-size:2.5rem;margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<h1>⬡ GPS Waypoint Analyzer</h1>
+<p class="sub">อัปโหลดไฟล์ .csv • รองรับ fix_quality Q=1 ถึง Q=5</p>
+
+<div class="quality-legend">
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q1)"></div><span style="color:var(--q1)">Q=1</span> GPS (SPS)</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q2)"></div><span style="color:var(--q2)">Q=2</span> DGPS</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q3)"></div><span style="color:var(--q3)">Q=3</span> PPS</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q4)"></div><span style="color:var(--q4)">Q=4</span> RTK Fix ✓</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q5)"></div><span style="color:var(--q5)">Q=5</span> RTK Float</div>
+</div>
+
+<div class="upload-zone" id="zone" ondragover="onDrag(event)" ondragleave="offDrag()" ondrop="onDrop(event)">
+  <input type="file" accept=".csv" onchange="loadFile(this)">
+  <div class="upload-icon" id="icon">📂</div>
+  <div class="upload-label">CSV FILE</div>
+  <div class="upload-name" id="fname">คลิกหรือลากไฟล์ .csv มาวาง</div>
+</div>
+
+<div id="results" class="hidden">
+  <div class="card" id="statCard"></div>
+
+  <div class="card">
+    <div class="card-title">แผนที่ Waypoint</div>
+    <div class="leaflet-wrap"><div class="leaflet-map" id="map"></div></div>
+    <div class="legend" id="mapLegend"></div>
+    <div class="card-title" style="margin-bottom:6px">Timeline (ลำดับ waypoint)</div>
+    <div class="timeline" id="timeline"></div>
+    <div class="timeline-label" id="tlLabel"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Speed Profile (m/s)</div>
+    <div class="speed-wrap"><canvas class="speed-canvas" id="speedChart"></canvas></div>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:var(--accent)"></div>Speed</div>
+      <div class="legend-item"><div class="dot" style="background:var(--q1)"></div>Q=1</div>
+      <div class="legend-item"><div class="dot" style="background:var(--q2)"></div>Q=2</div>
+      <div class="legend-item"><div class="dot" style="background:var(--q3)"></div>Q=3</div>
+      <div class="legend-item"><div class="dot" style="background:var(--q4)"></div>Q=4</div>
+      <div class="legend-item"><div class="dot" style="background:var(--q5)"></div>Q=5</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">รายละเอียดสถิติ</div>
+    <div class="detail-grid" id="detailGrid"></div>
+  </div>
+</div>
+
+<div id="placeholder">
+  <div class="empty-state">
+    <div class="big">🛰️</div>
+    <div>อัปโหลดไฟล์ .csv เพื่อเริ่มวิเคราะห์</div>
+    <div style="margin-top:8px;color:#334155">รองรับคอลัมน์: lat, lon, speed, heading, fix_quality</div>
+  </div>
+</div>
+
+<script>
+let dataset = null;
+let leafletMap = null;
+const Q_INFO = {1:{label:'GPS',color:'#ff4d4f'},2:{label:'DGPS',color:'#fa8c16'},3:{label:'PPS',color:'#1890ff'},4:{label:'Fix',color:'#00e676'},5:{label:'Float',color:'#ffd600'}};
+const qColor = q => (Q_INFO[q]||Q_INFO[1]).color;
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n').filter(l=>l.trim());
+  let startIdx = 0;
+  if (isNaN(Number(lines[0].split(',')[0].trim()))) startIdx = 1;
+  const result = [];
+  for (let li = startIdx; li < lines.length; li++) {
+    const parts = lines[li].split(',').map(s=>s.trim());
+    if (parts.length < 5) continue;
+    const vals = parts.map(Number);
+    if (vals.some(isNaN)) continue;
+    const [lat,lon,speed,heading,fix] = vals;
+    if (lat<-90||lat>90||lon<-180||lon>180) continue;
+    const fixQ = Math.round(fix);
+    result.push({lat,lon,speed,heading,fix:(fixQ>=1&&fixQ<=5)?fixQ:1});
+  }
+  return result;
+}
+
+function calcStats(data) {
+  const total = data.length;
+  const counts = {};
+  for (let q=1;q<=5;q++) counts[q] = data.filter(d=>d.fix===q).length;
+  const speeds = data.map(d=>d.speed);
+  const avgSpeed = speeds.reduce((s,v)=>s+v,0)/total;
+  const maxSpeed = Math.max(...speeds);
+  const minSpeed = Math.min(...speeds);
+  const headings = data.map(d=>d.heading);
+  const avgHeading = headings.reduce((s,v)=>s+v,0)/total;
+  const pct = q => ((counts[q]/total)*100).toFixed(1);
+  const lats = data.map(d=>d.lat), lons = data.map(d=>d.lon);
+  const latSpan = (Math.max(...lats)-Math.min(...lats))*111000;
+  const lonSpan = (Math.max(...lons)-Math.min(...lons))*111000*Math.cos(data[0].lat*Math.PI/180);
+  const approxDist = Math.sqrt(latSpan*latSpan+lonSpan*lonSpan);
+  return {total,counts,pct,avgSpeed,maxSpeed,minSpeed,avgHeading,approxDist};
+}
+
+function loadFile(input){const f=input.files[0];if(f) readFile(f);}
+function readFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const data=parseCSV(e.target.result);
+    if(!data.length){alert('ไม่พบข้อมูลที่ถูกต้อง');return;}
+    dataset=data;
+    document.getElementById('fname').textContent=file.name+' ('+data.length+' pts)';
+    document.getElementById('icon').textContent='✅';
+    document.getElementById('zone').classList.add('loaded');
+    renderAll();
+  };
+  reader.readAsText(file);
+}
+function onDrag(e){e.preventDefault();document.getElementById('zone').classList.add('drag');}
+function offDrag(){document.getElementById('zone').classList.remove('drag');}
+function onDrop(e){e.preventDefault();offDrag();const f=e.dataTransfer.files[0];if(f) readFile(f);}
+
+function renderAll(){
+  document.getElementById('results').classList.remove('hidden');
+  document.getElementById('placeholder').classList.add('hidden');
+  renderStats();
+  setTimeout(()=>{buildMap();drawSpeed();},100);
+}
+
+function renderStats(){
+  const s = calcStats(dataset);
+  const card = document.getElementById('statCard');
+  const statBoxes = `
+    <div class="stat-box"><div class="stat-label">TOTAL</div><div class="stat-value" style="color:var(--accent)">${s.total}</div><div class="stat-sub">waypoints</div></div>
+    ${[1,2,3,4,5].map(q=>`<div class="stat-box"><div class="stat-label" style="color:${qColor(q)}">Q=${q} ${Q_INFO[q].label.toUpperCase()}</div><div class="stat-value" style="color:${qColor(q)}">${s.counts[q]}</div><div class="stat-sub">${s.pct(q)}%</div></div>`).join('')}
+  `;
+  const barSegs = [1,2,3,4,5].map(q=>{
+    const p=parseFloat(s.pct(q));
+    return `<div class="bar-fill" style="width:${p}%;background:${qColor(q)}">${p>7?p+'%':''}</div>`;
+  }).join('');
+  card.innerHTML = `
+    <div class="card-title">สถิติ Fix Quality</div>
+    <div class="stats-grid">${statBoxes}</div>
+    <div class="bar-labels">${[1,2,3,4,5].map(q=>`<span style="color:${qColor(q)}">Q${q}: ${s.pct(q)}%</span>`).join('')}</div>
+    <div class="bar-track">${barSegs}</div>
+  `;
+
+  document.getElementById('timeline').innerHTML = dataset.map(d=>`<div style="flex:0 0 auto;width:${100/dataset.length}%;background:${qColor(d.fix)};opacity:.85"></div>`).join('');
+  document.getElementById('tlLabel').textContent = `จุดที่ 1 → จุดที่ ${dataset.length}`;
+
+  const mapLegend = document.getElementById('mapLegend');
+  mapLegend.innerHTML = [1,2,3,4,5].map(q=>`<div class="legend-item"><div class="dot" style="background:${qColor(q)}"></div>Q=${q} ${Q_INFO[q].label}</div>`).join('')
+    +`<div class="legend-item"><div class="dot" style="background:#38bdf8;border-radius:2px;width:14px;height:4px"></div>Start</div>`
+    +`<div class="legend-item"><div class="dot" style="background:#f472b6;border-radius:2px;width:14px;height:4px"></div>End</div>`;
+
+  const dg = document.getElementById('detailGrid');
+  const fmt = v => typeof v==='number'?v.toFixed(4):v;
+  const rows1 = [
+    ['Total waypoints', s.total],
+    ['Avg speed', s.avgSpeed.toFixed(4)+' m/s'],
+    ['Max speed', s.maxSpeed.toFixed(4)+' m/s'],
+    ['Min speed', s.minSpeed.toFixed(4)+' m/s'],
+    ['Avg heading', s.avgHeading.toFixed(2)+'°'],
+    ['Approx span (m)', s.approxDist.toFixed(1)],
+  ];
+  const rows2 = [1,2,3,4,5].map(q=>[`Q=${q} ${Q_INFO[q].label} (pts)`, s.counts[q]+' ('+s.pct(q)+'%)']);
+  const makeTable = rows => `<table class="detail-table">${rows.map(r=>`<tr><td>${r[0]}</td><td style="color:var(--text)">${r[1]}</td></tr>`).join('')}</table>`;
+  dg.innerHTML = `<div>${makeTable(rows1)}</div><div>${makeTable(rows2)}</div>`;
+}
+
+function buildMap(){
+  const el=document.getElementById('map');
+  if(!el) return;
+  if(leafletMap){leafletMap.remove();leafletMap=null;}
+  const map=L.map(el,{zoomControl:true});
+  leafletMap=map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:22}).addTo(map);
+  const latlngs=dataset.map(d=>[d.lat,d.lon]);
+  L.polyline(latlngs,{color:'#38bdf8',weight:2,opacity:.5}).addTo(map);
+  dataset.forEach((d,i)=>{
+    const isFirst=i===0,isLast=i===dataset.length-1;
+    const color=isFirst?'#38bdf8':isLast?'#f472b6':qColor(d.fix);
+    L.circleMarker([d.lat,d.lon],{radius:(isFirst||isLast)?8:4.5,color,fillColor:color,fillOpacity:(isFirst||isLast)?.8:.88,weight:(isFirst||isLast)?2:0})
+    .bindPopup(`<b style="color:#38bdf8">WP #${i+1}</b><br><span style="color:${qColor(d.fix)}">Q=${d.fix} ${Q_INFO[d.fix].label}</span><br><span style="color:#94a3b8">lat</span> ${d.lat.toFixed(7)}<br><span style="color:#94a3b8">lon</span> ${d.lon.toFixed(7)}<br><span style="color:#94a3b8">speed</span> ${d.speed.toFixed(4)} m/s &nbsp; <span style="color:#94a3b8">hdg</span> ${d.heading.toFixed(2)}°${isFirst?'<br><b style="color:#38bdf8">▶ START</b>':''}${isLast?'<br><b style="color:#f472b6">■ END</b>':''}`)
+    .addTo(map);
+  });
+  map.fitBounds(latlngs,{padding:[24,24]});
+}
+
+function drawSpeed(){
+  const canvas=document.getElementById('speedChart');
+  if(!canvas||!dataset) return;
+  canvas.width=canvas.parentElement.clientWidth||700;
+  canvas.height=160;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height;
+  const padL=50,padR=16,padT=14,padB=24;
+  const speeds=dataset.map(d=>d.speed);
+  const maxSpd=Math.max(...speeds)*1.1||1;
+  const toX=i=>padL+(i/Math.max(dataset.length-1,1))*(W-padL-padR);
+  const toY=v=>padT+(1-v/maxSpd)*(H-padT-padB);
+  ctx.clearRect(0,0,W,H);
+  for(let g=0;g<=4;g++){
+    const y=padT+(g/4)*(H-padT-padB);
+    ctx.strokeStyle='#1e2d40';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
+    ctx.fillStyle='#475569';ctx.font='9px Space Mono,monospace';
+    ctx.fillText(((1-g/4)*maxSpd).toFixed(3),2,y+3);
+  }
+  dataset.forEach((d,i)=>{
+    if(i>=dataset.length-1) return;
+    ctx.fillStyle=qColor(d.fix)+'18';
+    ctx.fillRect(toX(i),padT,toX(i+1)-toX(i),H-padT-padB);
+  });
+  ctx.beginPath();
+  dataset.forEach((d,i)=>{const x=toX(i),y=toY(d.speed);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.strokeStyle='#38bdf8';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='8px Space Mono,monospace';
+  ctx.fillText('speed (m/s)',padL,padT-2);
+}
+</script>
+</body>
+</html>

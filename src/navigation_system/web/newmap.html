@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗺️ ROS2 Campus Navigation System</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #1a1a1a; }
+        #map { width: 100vw; height: 100vh; }
+        
+        .gnss-display {
+            position: absolute; top: 10px; left: 10px; z-index: 1000;
+            background: rgba(76,175,80,0.95); color: white; padding: 12px;
+            border-radius: 8px; font-family: 'Courier New', monospace;
+            font-size: 11px; min-width: 160px; backdrop-filter: blur(5px);
+        }
+        
+        .building-panel {
+            position: absolute; bottom: 10px; left: 10px; z-index: 1000;
+            background: rgba(33,150,243,0.95); color: white; padding: 12px;
+            border-radius: 8px; max-width: 300px; backdrop-filter: blur(5px);
+        }
+        
+        .building-btn {
+            background: rgba(255,255,255,0.2); color: white; border: none;
+            padding: 8px 12px; margin: 2px; border-radius: 6px; cursor: pointer;
+            font-size: 10px; transition: all 0.3s ease;
+        }
+        
+        .building-btn:hover { background: rgba(255,255,255,0.3); }
+        
+        .status {
+            position: absolute; top: 10px; right: 10px; z-index: 1100;
+            padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 12px;
+        }
+        
+        .connected { background: linear-gradient(135deg, #4CAF50, #45a049); color: white; }
+        .disconnected { background: linear-gradient(135deg, #f44336, #d32f2f); color: white; }
+        
+        .destination-info {
+            position: absolute; top: 60px; right: 10px; z-index: 1000;
+            background: rgba(255,87,34,0.95); color: white; padding: 12px;
+            border-radius: 8px; font-size: 11px; min-width: 200px;
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- GNSS Display -->
+    <div class="gnss-display" id="gpsDisplay">
+        <div><strong>📍 GNSS Position</strong></div>
+        <div id="latDisplay">Lat: 0.000000°</div>
+        <div id="lonDisplay">Lon: 0.000000°</div>
+        <div id="timeDisplay">--:--:--</div>
+    </div>
+    
+    <!-- Connection Status -->
+    <div class="status disconnected" id="statusIndicator">Disconnected</div>
+    
+    <!-- Destination Info -->
+    <div class="destination-info" id="destinationInfo" style="display: none;">
+        <div><strong>🎯 ปลายทาง</strong></div>
+        <div id="destName">-</div>
+        <div id="destDistance">ระยะทาง: - m</div>
+        <div id="destStatus">สถานะ: รอการเดินทาง</div>
+    </div>
+    
+    <!-- Building Selection Panel -->
+    <div class="building-panel">
+        <div><strong>🏢 เลือกอาคารปลายทาง</strong></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px;">
+            <button class="building-btn" onclick="selectBuilding('S14')">S14</button>
+            <button class="building-btn" onclick="selectBuilding('S13')">S13</button>
+            <button class="building-btn" onclick="selectBuilding('S12')">S12</button>
+            <button class="building-btn" onclick="selectBuilding('S15')">S15</button>
+            <button class="building-btn" onclick="selectBuilding('N19')">N19</button>
+            <button class="building-btn" onclick="selectBuilding('N20')">N20</button>
+            <button class="building-btn" onclick="selectBuilding('S11')">S11</button>
+        </div>
+        <div id="selectedBuilding" style="margin-top: 10px; font-size: 10px;">
+            ยังไม่ได้เลือกอาคาร - คลิกปุ่มด้านบนหรือคลิกบนแผนที่
+        </div>
+    </div>
+    
+    <!-- Map Container -->
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Global Variables
+        let map, userMarker, destMarker;
+        let socket = null;
+        let selectedDestination = null;
+        let currentPosition = null;
+        
+        // Building coordinates
+        const buildingData = {
+            "S14": { lat: 13.650940, lon: 100.492070, name: "King Mongkut's 190th Anniversary Memorial Building" },
+            "S13": { lat: 13.650076, lon: 100.492140, name: "Classroom Building 3" },
+            "S12": { lat: 13.649913, lon: 100.492690, name: "Classroom Building 4" },
+            "S15": { lat: 13.650154, lon: 100.492984, name: "Department of Chemical Engineering Building" },
+            "N19": { lat: 13.651010, lon: 100.492980, name: "Production Engineering Laboratory Building 5" },
+            "N20": { lat: 13.6513894, lon: 100.4929824, name: "Classroom Building 1" },
+            "S11": { lat: 13.649992, lon: 100.493327, name: "Classroom Building 5" }
+        };
+        
+        // Initialize Map
+        function initMap() {
+            console.log("🗺️ Initializing Campus Navigation Map...");
+            
+            map = L.map('map', {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([13.650748, 100.492985], 17);
+            
+            // Satellite map
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
+                maxZoom: 20
+            }).addTo(map);
+            
+            // Add building markers
+            addBuildingMarkers();
+            
+            // Add click event for custom waypoint
+            map.on('click', onMapClick);
+            
+            // Connect to WebSocket
+            connectWebSocket();
+            
+            // Start time display
+            updateTimeDisplay();
+            setInterval(updateTimeDisplay, 1000);
+        }
+        
+        function addBuildingMarkers() {
+            Object.keys(buildingData).forEach(code => {
+                const building = buildingData[code];
+                const marker = L.marker([building.lat, building.lon], {
+                    icon: L.divIcon({
+                        className: 'building-marker',
+                        html: `<div style="background: #2196F3; color: white; padding: 4px 8px; 
+                                      border-radius: 4px; font-weight: bold; font-size: 10px;
+                                      border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+                                 ${code}
+                               </div>`,
+                        iconSize: [30, 20],
+                        iconAnchor: [15, 10]
+                    })
+                }).addTo(map)
+                .bindPopup(`<b>${code}</b><br>${building.name}`)
+                .on('click', () => selectBuilding(code));
+            });
+        }
+        
+        function onMapClick(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            
+            console.log(`Custom waypoint selected: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            setCustomWaypoint(lat, lon);
+        }
+        
+        function setCustomWaypoint(lat, lon) {
+            selectedDestination = { lat: lat, lon: lon, name: "Custom Waypoint", code: "CUSTOM" };
+            
+            // Update UI
+            document.getElementById('selectedBuilding').textContent = 
+                `Custom Waypoint: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+            
+            // Show destination info
+            const destInfo = document.getElementById('destinationInfo');
+            destInfo.style.display = 'block';
+            document.getElementById('destName').textContent = 'Custom Waypoint';
+            
+            // Create destination marker
+            updateDestinationMarker(lat, lon, 'CUSTOM');
+            
+            // Send to navigation system
+            sendDestinationToROS2(lat, lon, 'Custom Waypoint');
+        }
+        
+        function selectBuilding(buildingCode) {
+            const building = buildingData[buildingCode];
+            if (!building) return;
+            
+            selectedDestination = { ...building, code: buildingCode };
+            
+            // Update UI
+            document.getElementById('selectedBuilding').textContent = 
+                `เลือก: ${buildingCode} - ${building.name}`;
+            
+            // Show destination info
+            const destInfo = document.getElementById('destinationInfo');
+            destInfo.style.display = 'block';
+            document.getElementById('destName').textContent = `${buildingCode} - ${building.name}`;
+            
+            // Create destination marker
+            updateDestinationMarker(building.lat, building.lon, buildingCode);
+            
+            // Send to navigation system
+            sendDestinationToROS2(building.lat, building.lon, building.name);
+        }
+        
+        function updateDestinationMarker(lat, lon, code) {
+            if (destMarker) {
+                map.removeLayer(destMarker);
+            }
+            
+            destMarker = L.marker([lat, lon], {
+                icon: L.divIcon({
+                    className: 'dest-marker',
+                    html: `<div style="width: 30px; height: 30px; background: #FF5722; 
+                                  border: 3px solid white; border-radius: 50%; 
+                                  display: flex; align-items: center; justify-content: center;
+                                  color: white; font-weight: bold; font-size: 12px;
+                                  box-shadow: 0 4px 15px rgba(255,87,34,0.6);">
+                             🎯
+                           </div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                })
+            }).addTo(map);
+        }
+        
+        function sendDestinationToROS2(lat, lon, name) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const routeData = {
+                    path: [{ lat: lat, lon: lon }],
+                    destination_name: name,
+                    destination_lat: lat,
+                    destination_lon: lon
+                };
+                socket.send(JSON.stringify(routeData));
+                console.log(`Destination sent to ROS2: ${name} (${lat.toFixed(6)}, ${lon.toFixed(6)})`);
+                
+                // Start navigation automatically
+                setTimeout(() => {
+                    socket.send(JSON.stringify({ navigation_command: 'start' }));
+                }, 1000);
+            }
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // WebSocket Connection
+        async function connectWebSocket() {
+            try {
+                console.log("🔍 Connecting to ROS2 WebSocket server...");
+                socket = new WebSocket('ws://localhost:5001');
+                
+                socket.onopen = function() {
+                    console.log("✅ Connected to ROS2 server");
+                    updateStatus('connected', 'ROS2 Connected');
+                };
+                
+                socket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        processData(data);
+                    } catch (e) {
+                        console.error(`Message error: ${e.message}`);
+                    }
+                };
+                
+                socket.onclose = function() {
+                    console.log("Connection closed");
+                    updateStatus('disconnected', 'Disconnected');
+                    setTimeout(connectWebSocket, 3000);
+                };
+                
+                socket.onerror = function(error) {
+                    console.error(`Socket error: ${error.message || 'Unknown'}`);
+                    updateStatus('disconnected', 'Connection Error');
+                };
+                
+            } catch (e) {
+                console.error(`WebSocket connection failed: ${e.message}`);
+                updateStatus('disconnected', 'Connection Failed');
+                setTimeout(connectWebSocket, 5000);
+            }
+        }
+        
+        function processData(data) {
+            if (data.latitude && data.longitude) {
+                currentPosition = { lat: data.latitude, lon: data.longitude };
+                updateUserPosition(data.latitude, data.longitude);
+                updateGNSSDisplay(data.latitude, data.longitude);
+                
+                // Update distance to destination
+                if (selectedDestination) {
+                    const distance = calculateDistance(
+                        data.latitude, data.longitude,
+                        selectedDestination.lat, selectedDestination.lon
+                    );
+                    document.getElementById('destDistance').textContent = 
+                        `ระยะทาง: ${distance.toFixed(1)} m`;
+                    
+                    // Check if arrived (within 5 meters)
+                    if (distance <= 5.0) {
+                        document.getElementById('destStatus').textContent = 'สถานะ: ✅ มาถึงแล้ว!';
+                    } else {
+                        document.getElementById('destStatus').textContent = 'สถานะ: 🚗 กำลังเดินทาง';
+                    }
+                }
+            }
+        }
+        
+        function updateUserPosition(lat, lon) {
+            if (userMarker) {
+                userMarker.setLatLng([lat, lon]);
+            } else {
+                userMarker = L.marker([lat, lon], {
+                    icon: L.divIcon({
+                        className: 'user-marker',
+                        html: `<div style="width: 25px; height: 25px; background: #4CAF50; 
+                                      border: 3px solid white; border-radius: 50%;
+                                      box-shadow: 0 4px 12px rgba(76,175,80,0.5);"></div>`,
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(map).bindPopup("🤖 Your Position");
+                
+                map.setView([lat, lon], 17);
+            }
+        }
+        
+        function updateGNSSDisplay(lat, lon) {
+            document.getElementById('latDisplay').textContent = `Lat: ${lat.toFixed(6)}°`;
+            document.getElementById('lonDisplay').textContent = `Lon: ${lon.toFixed(6)}°`;
+        }
+        
+        function updateTimeDisplay() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('th-TH', { 
+                hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            document.getElementById('timeDisplay').textContent = timeString;
+        }
+        
+        function updateStatus(status, message) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.textContent = message;
+            indicator.className = `status ${status}`;
+        }
+        
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("🎯 Campus Navigation starting...");
+            initMap();
+        });
+    </script>
+</body>
+</html>

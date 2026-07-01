@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Waypoint Accuracy Comparison</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sarabun:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0f1a; --panel: #111827; --border: #1e2d40;
+    --text: #e2e8f0; --muted: #64748b; --accent: #38bdf8;
+    --q1: #ff4d4f;
+    --q2: #fa8c16;
+    --q3: #1890ff;
+    --q4: #00e676;
+    --q5: #ffd600;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Sarabun', sans-serif; min-height: 100vh; padding: 24px; }
+
+  h1 { font-family: 'Space Mono', monospace; font-size: 1.05rem; color: var(--accent); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; font-family: 'Space Mono', monospace; }
+
+  .quality-legend { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .ql-item { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; font-family: 'Space Mono', monospace; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+  .ql-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+  @media (max-width: 700px) { .upload-grid { grid-template-columns: 1fr; } }
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 22px 18px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative; background: var(--panel); }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(56,189,248,0.05); }
+  .upload-zone.loaded { border-color: var(--q4); border-style: solid; }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 2rem; margin-bottom: 8px; }
+  .upload-label { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--muted); letter-spacing: 0.08em; }
+  .upload-name { font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--q4); margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .upload-badge { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 20px; font-size: 0.65rem; font-family: 'Space Mono', monospace; }
+  .badge-ds1 { background: rgba(56,189,248,0.15); color: var(--accent); }
+  .badge-ds2 { background: rgba(192,132,252,0.15); color: #c084fc; }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .full { grid-column: 1 / -1; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card-title { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 14px; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+  .stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px; text-align: center; }
+  .stat-label { font-size: 0.62rem; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 4px; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 1.1rem; font-weight: 700; }
+  .stat-sub { font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+  .total-color { color: var(--accent); }
+
+  .bar-label { display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 5px; flex-wrap: wrap; gap: 4px; }
+  .bar-track { background: var(--bg); border-radius: 6px; height: 20px; overflow: hidden; border: 1px solid var(--border); display: flex; margin-bottom: 14px; }
+  .bar-fill { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-family: 'Space Mono', monospace; font-weight: 700; color: #000; transition: width 0.8s ease; overflow: hidden; white-space: nowrap; }
+
+  .leaflet-wrap { width: 100%; height: 300px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 12px; }
+  .leaflet-map { width: 100%; height: 100%; }
+  .leaflet-tile { filter: brightness(0.75) saturate(0.6) hue-rotate(185deg); }
+  .leaflet-container { background: #0a1020; }
+  .leaflet-popup-content-wrapper { background: #1e2d40 !important; color: var(--text) !important; border: 1px solid var(--border) !important; border-radius: 8px !important; box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; font-family: 'Space Mono', monospace !important; font-size: 0.7rem !important; }
+  .leaflet-popup-tip { background: #1e2d40 !important; }
+  .leaflet-popup-close-button { color: var(--muted) !important; }
+
+  .legend { display: flex; gap: 12px; margin-bottom: 12px; font-size: 0.72rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .timeline { display: flex; gap: 1px; height: 16px; border-radius: 5px; overflow: hidden; margin-bottom: 6px; }
+  .timeline-label { font-size: 0.65rem; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  .speed-wrap { position: relative; width: 100%; height: 170px; background: #050d18; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 10px; }
+  canvas.speed-canvas { width: 100%; height: 100%; display: block; }
+
+  .cmp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .cmp-row { grid-template-columns: 1fr; } }
+  .cmp-table { width: 100%; border-collapse: collapse; }
+  .cmp-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+  .cmp-table td:first-child { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 0.68rem; }
+  .cmp-table td:last-child { font-family: 'Space Mono', monospace; text-align: right; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); font-family: 'Space Mono', monospace; font-size: 0.75rem; }
+  .empty-state .big { font-size: 2.5rem; margin-bottom: 10px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>⬡ GPS Waypoint Accuracy Comparison</h1>
+<p class="subtitle">อัปโหลดไฟล์ .csv สูงสุด 2 ชุด • รองรับ fix_quality Q=1 ถึง Q=5</p>
+
+<div class="quality-legend">
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q1)"></div><span style="color:var(--q1)">Q=1</span> GPS (SPS)</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q2)"></div><span style="color:var(--q2)">Q=2</span> DGPS</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q3)"></div><span style="color:var(--q3)">Q=3</span> PPS</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q4)"></div><span style="color:var(--q4)">Q=4</span> RTK Fix ✓</div>
+  <div class="ql-item"><div class="ql-dot" style="background:var(--q5)"></div><span style="color:var(--q5)">Q=5</span> RTK Float</div>
+</div>
+
+<div class="upload-grid">
+  <div class="upload-zone" id="zone1" ondragover="onDrag(event,1)" ondragleave="offDrag(1)" ondrop="onDrop(event,1)">
+    <input type="file" accept=".csv" onchange="loadFile(this,1)">
+    <div class="upload-icon" id="icon1">📂</div>
+    <div class="upload-label">DATASET 1</div>
+    <div class="upload-name" id="fname1">คลิกหรือลาก .csv มาวาง</div>
+    <div><span class="upload-badge badge-ds1">CSV #1</span></div>
+  </div>
+  <div class="upload-zone" id="zone2" ondragover="onDrag(event,2)" ondragleave="offDrag(2)" ondrop="onDrop(event,2)">
+    <input type="file" accept=".csv" onchange="loadFile(this,2)">
+    <div class="upload-icon" id="icon2">📂</div>
+    <div class="upload-label">DATASET 2</div>
+    <div class="upload-name" id="fname2">คลิกหรือลาก .csv มาวาง</div>
+    <div><span class="upload-badge badge-ds2">CSV #2</span></div>
+  </div>
+</div>
+
+<div id="results" class="hidden">
+  <div class="layout">
+    <div class="card" id="card1"></div>
+    <div class="card" id="card2"></div>
+
+    <div class="card full">
+      <div class="card-title">Speed Profile — <span style="color:var(--accent)">■ Dataset 1</span> vs <span style="color:#c084fc">■ Dataset 2</span></div>
+      <div class="speed-wrap"><canvas class="speed-canvas" id="speedChart"></canvas></div>
+      <div class="legend">
+        <div class="legend-item"><div class="dot" style="background:var(--accent)"></div>DS1 Speed</div>
+        <div class="legend-item"><div class="dot" style="background:#c084fc"></div>DS2 Speed</div>
+        <div class="legend-item"><div class="dot" style="background:var(--q1)"></div>Q=1</div>
+        <div class="legend-item"><div class="dot" style="background:var(--q2)"></div>Q=2</div>
+        <div class="legend-item"><div class="dot" style="background:var(--q3)"></div>Q=3</div>
+        <div class="legend-item"><div class="dot" style="background:var(--q4)"></div>Q=4 Fix</div>
+        <div class="legend-item"><div class="dot" style="background:var(--q5)"></div>Q=5 Float</div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <div class="card-title">Summary Comparison</div>
+      <div class="cmp-row" id="summaryRow"></div>
+    </div>
+  </div>
+</div>
+
+<div id="placeholder">
+  <div class="empty-state">
+    <div class="big">🛰️</div>
+    <div>อัปโหลดไฟล์ .csv อย่างน้อย 1 ชุดเพื่อเริ่มวิเคราะห์</div>
+    <div style="margin-top:8px;color:#334155">รองรับคอลัมน์: lat, lon, speed, heading, fix_quality</div>
+  </div>
+</div>
+
+<script>
+const datasets = { 1: null, 2: null };
+const leafletMaps = { 1: null, 2: null };
+
+const Q_INFO = {
+  1: { label: 'GPS',   color: '#ff4d4f' },
+  2: { label: 'DGPS',  color: '#fa8c16' },
+  3: { label: 'PPS',   color: '#fadb14' },
+  4: { label: 'Fix',   color: '#00e676' },
+  5: { label: 'Float', color: '#ffd600' },
+};
+function qColor(q) { return (Q_INFO[q] || Q_INFO[1]).color; }
+function qLabel(q) { return `Q=${q} ${(Q_INFO[q]||Q_INFO[1]).label}`; }
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const result = [];
+
+  // ตรวจหา header row — ข้ามถ้าบรรทัดแรกไม่ใช่ตัวเลข
+  let startIdx = 0;
+  const firstParts = lines[0].split(',').map(s => s.trim());
+  if (isNaN(Number(firstParts[0]))) startIdx = 1;
+
+  for (let li = startIdx; li < lines.length; li++) {
+    const parts = lines[li].split(',').map(s => s.trim());
+    if (parts.length < 5) continue;
+    const vals = parts.map(Number);
+    if (vals.some(isNaN)) continue;
+
+    // CSV format: lat, lon, speed, heading, fix_quality
+    const [lat, lon, speed, heading, fix] = vals;
+
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+    const fixQ = Math.round(fix);
+    result.push({
+      lat,
+      lon,
+      speed,          // m/s ตามที่บันทึก ไม่แปลงหน่วย
+      heading,
+      fix: (fixQ >= 1 && fixQ <= 5) ? fixQ : 1
+    });
+  }
+  return result;
+}
+
+function calcStats(data) {
+  const total = data.length;
+  const counts = {};
+  for (let q = 1; q <= 5; q++) counts[q] = data.filter(d => d.fix === q).length;
+  const avgSpeed = data.reduce((s, d) => s + d.speed, 0) / total;
+  const maxSpeed = Math.max(...data.map(d => d.speed));
+  const pct = q => ((counts[q]/total)*100).toFixed(1);
+  return { total, counts, pct, avgSpeed: avgSpeed.toFixed(3), maxSpeed: maxSpeed.toFixed(3) };
+}
+
+function loadFile(input, idx) { const f = input.files[0]; if (f) readFile(f, idx); }
+function readFile(file, idx) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = parseCSV(e.target.result);
+    if (!data.length) { alert('ไม่พบข้อมูลที่ถูกต้องในไฟล์นี้'); return; }
+    datasets[idx] = data;
+    document.getElementById('fname'+idx).textContent = file.name + ' (' + data.length + ' pts)';
+    document.getElementById('icon'+idx).textContent = '✅';
+    document.getElementById('zone'+idx).classList.add('loaded');
+    renderAll();
+  };
+  reader.readAsText(file);
+}
+function onDrag(e,idx) { e.preventDefault(); document.getElementById('zone'+idx).classList.add('drag'); }
+function offDrag(idx) { document.getElementById('zone'+idx).classList.remove('drag'); }
+function onDrop(e,idx) { e.preventDefault(); offDrag(idx); const f=e.dataTransfer.files[0]; if(f) readFile(f,idx); }
+
+function renderAll() {
+  const hasAny = datasets[1] || datasets[2];
+  document.getElementById('results').classList.toggle('hidden', !hasAny);
+  document.getElementById('placeholder').classList.toggle('hidden', !!hasAny);
+  if (!hasAny) return;
+  [1,2].forEach(renderCard);
+  renderSummary();
+  setTimeout(drawSpeed, 120);
+}
+
+function renderCard(idx) {
+  const data = datasets[idx];
+  const card = document.getElementById('card'+idx);
+  const dsColor = idx===1 ? 'var(--accent)' : '#c084fc';
+  const lineColor = idx===1 ? '#38bdf8' : '#c084fc';
+
+  if (!data) {
+    card.innerHTML = `<div class="card-title">Dataset ${idx}</div><div class="empty-state" style="padding:30px 10px"><div class="big" style="font-size:1.5rem">📂</div><div>ยังไม่ได้อัปโหลด</div></div>`;
+    return;
+  }
+  const s = calcStats(data);
+
+  const statBoxes = `
+    <div class="stat-box"><div class="stat-label">TOTAL</div><div class="stat-value total-color">${s.total}</div><div class="stat-sub">จุดทั้งหมด</div></div>
+    ${[1,2,3,4,5].map(q => `
+    <div class="stat-box">
+      <div class="stat-label" style="color:${qColor(q)}">Q=${q} ${Q_INFO[q].label.toUpperCase()}</div>
+      <div class="stat-value" style="color:${qColor(q)}">${s.counts[q]}</div>
+      <div class="stat-sub">${s.pct(q)}%</div>
+    </div>`).join('')}
+  `;
+
+  const barSegs = [1,2,3,4,5].map(q => {
+    const p = parseFloat(s.pct(q));
+    return `<div class="bar-fill" style="width:${p}%;background:${qColor(q)}">${p>7?p+'%':''}</div>`;
+  }).join('');
+
+  const mapLegend = [1,2,3,4,5].map(q =>
+    `<div class="legend-item"><div class="dot" style="background:${qColor(q)}"></div>${qLabel(q)}</div>`
+  ).join('');
+
+  card.innerHTML = `
+    <div class="card-title">Dataset ${idx} <span style="color:${dsColor};font-size:0.65rem">■</span></div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">${statBoxes}</div>
+    <div class="bar-label">
+      ${[1,2,3,4,5].map(q=>`<span style="color:${qColor(q)}">Q${q}: ${s.pct(q)}%</span>`).join('')}
+    </div>
+    <div class="bar-track">${barSegs}</div>
+    <div class="leaflet-wrap"><div class="leaflet-map" id="map${idx}"></div></div>
+    <div class="legend">${mapLegend}
+      <div class="legend-item"><div class="dot" style="background:#38bdf8;border-radius:2px;width:14px;height:4px"></div>Start</div>
+      <div class="legend-item"><div class="dot" style="background:#f472b6;border-radius:2px;width:14px;height:4px"></div>End</div>
+    </div>
+    <div class="card-title" style="margin-bottom:6px">Timeline (ลำดับ waypoint)</div>
+    <div class="timeline" id="tl${idx}"></div>
+    <div class="timeline-label" style="margin-top:4px">จุดที่ 1 → จุดที่ ${data.length}</div>
+  `;
+
+  document.getElementById('tl'+idx).innerHTML = data.map(d =>
+    `<div style="flex:0 0 auto;width:${100/data.length}%;background:${qColor(d.fix)};opacity:0.85"></div>`
+  ).join('');
+
+  setTimeout(() => buildMap(idx, data, lineColor), 80);
+}
+
+function buildMap(idx, data, lineColor) {
+  const el = document.getElementById('map'+idx);
+  if (!el) return;
+  if (leafletMaps[idx]) { leafletMaps[idx].remove(); leafletMaps[idx] = null; }
+
+  const map = L.map(el, { zoomControl: true });
+  leafletMaps[idx] = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 22
+  }).addTo(map);
+
+  const latlngs = data.map(d => [d.lat, d.lon]);
+  L.polyline(latlngs, { color: lineColor, weight: 2, opacity: 0.5 }).addTo(map);
+
+  data.forEach((d, i) => {
+    const isFirst = i === 0, isLast = i === data.length - 1;
+    const color = isFirst ? '#38bdf8' : isLast ? '#f472b6' : qColor(d.fix);
+
+    L.circleMarker([d.lat, d.lon], {
+      radius: (isFirst || isLast) ? 8 : 4.5,
+      color, fillColor: color,
+      fillOpacity: (isFirst || isLast) ? 0.8 : 0.88,
+      weight: (isFirst || isLast) ? 2 : 0,
+    })
+    .bindPopup(`
+      <b style="color:${lineColor}">DS${idx}</b> &nbsp; #${i+1}<br>
+      <span style="color:${qColor(d.fix)}">${qLabel(d.fix)}</span><br>
+      <span style="color:#94a3b8">lat</span> ${d.lat.toFixed(7)}<br>
+      <span style="color:#94a3b8">lon</span> ${d.lon.toFixed(7)}<br>
+      <span style="color:#94a3b8">speed</span> ${d.speed.toFixed(4)} m/s &nbsp; <span style="color:#94a3b8">heading</span> ${d.heading.toFixed(2)}°
+      ${isFirst ? '<br><b style="color:#38bdf8">▶ START</b>' : ''}
+      ${isLast  ? '<br><b style="color:#f472b6">■ END</b>'   : ''}
+    `)
+    .addTo(map);
+  });
+
+  map.fitBounds(latlngs, { padding: [24, 24] });
+}
+
+function drawSpeed() {
+  const canvas = document.getElementById('speedChart');
+  if (!canvas) return;
+  const dsList = [datasets[1], datasets[2]].filter(Boolean);
+  if (!dsList.length) return;
+  canvas.width = canvas.parentElement.clientWidth || 800;
+  canvas.height = 170;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const padL=46, padR=16, padT=14, padB=24;
+  const allSpd = dsList.flatMap(d => d.map(p => p.speed));
+  const maxSpd = Math.max(...allSpd) * 1.1 || 1;
+  const toX = (i,total) => padL + (i/Math.max(total-1,1))*(W-padL-padR);
+  const toY = v => padT + (1-v/maxSpd)*(H-padT-padB);
+
+  ctx.clearRect(0, 0, W, H);
+
+  for (let g=0; g<=4; g++) {
+    const y = padT + (g/4)*(H-padT-padB);
+    ctx.strokeStyle='#1e2d40'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(W-padR,y); ctx.stroke();
+    ctx.fillStyle='#475569'; ctx.font='9px Space Mono,monospace';
+    ctx.fillText(((1-g/4)*maxSpd).toFixed(3), 2, y+3);
+  }
+
+  const lineColors = ['#38bdf8','#c084fc'];
+  dsList.forEach((data, di) => {
+    data.forEach((d, i) => {
+      if (i >= data.length-1) return;
+      ctx.fillStyle = qColor(d.fix) + '18';
+      ctx.fillRect(toX(i,data.length), padT, toX(i+1,data.length)-toX(i,data.length), H-padT-padB);
+    });
+    ctx.beginPath();
+    data.forEach((d,i) => {
+      const x=toX(i,data.length), y=toY(d.speed);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle=lineColors[di]; ctx.lineWidth=1.5; ctx.stroke();
+  });
+
+  ctx.fillStyle='#64748b'; ctx.font='8px Space Mono,monospace';
+  ctx.fillText('speed (m/s)', padL, padT-2);
+}
+
+function renderSummary() {
+  const el = document.getElementById('summaryRow');
+  const fields = [
+    ['TOTAL WP',    d=>d.total],
+    ...([1,2,3,4,5].map(q=>[`Q=${q} ${Q_INFO[q].label.toUpperCase()}`, d=>d.counts[q]+' pts'])),
+    ...([1,2,3,4,5].map(q=>[`Q${q} %`, d=>d.pct(q)+'%'])),
+    ['AVG SPEED',   d=>d.avgSpeed+' m/s'],
+    ['MAX SPEED',   d=>d.maxSpeed+' m/s'],
+  ];
+
+  [1,2].forEach(idx => {
+    let div = document.getElementById('sum'+idx);
+    if (!div) {
+      div = document.createElement('div'); div.id='sum'+idx;
+      div.style.cssText='background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px';
+      el.appendChild(div);
+    }
+    const data = datasets[idx];
+    if (!data) {
+      div.innerHTML=`<div class="card-title">DATASET ${idx}</div><div style="color:var(--muted);font-size:0.75rem;padding:10px 0">ยังไม่ได้อัปโหลด</div>`;
+      return;
+    }
+    const s = calcStats(data);
+    const so = datasets[idx===1?2:1] ? calcStats(datasets[idx===1?2:1]) : null;
+    const dsColor = idx===1?'var(--accent)':'#c084fc';
+
+    div.innerHTML = `<div class="card-title">DATASET ${idx} <span style="color:${dsColor}">■</span></div>
+      <table class="cmp-table">${fields.map((f, fi)=>{
+        const val = f[1](s);
+        const numVal = parseFloat(val);
+        const numOther = so ? parseFloat(f[1](so)) : null;
+        const isQpct = fi >= 6 && fi <= 10;
+        const isGood = so && isQpct && numVal >= numOther;
+        const qIndex = (fi >= 1 && fi <= 5) ? fi : (fi >= 6 && fi <= 10) ? fi-5 : null;
+        return `<tr>
+          <td>${f[0]}</td>
+          <td style="color:${(isQpct&&isGood)?'var(--q4)':qIndex?qColor(qIndex):'var(--text)'};${isGood?'font-weight:700':''}">${val}</td>
+        </tr>`;
+      }).join('')}</table>`;
+  });
+}
+
+renderAll();
+</script>
+</body>
+</html>

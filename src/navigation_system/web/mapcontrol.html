@@ -1,0 +1,130 @@
+<!-- <!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Live Map with Destination</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([13.65, 100.492], 17); // ตั้งศูนย์กลางเริ่มต้น (สามารถเปลี่ยนได้)
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const currentMarker = L.marker([13.65, 100.492], { color: 'blue' }).addTo(map)
+      .bindPopup('🚗 ตำแหน่งปัจจุบัน').openPopup();
+
+    let destinationMarker = null;
+
+    // WebSocket รับตำแหน่งปัจจุบันจาก ROS
+    const positionSocket = new WebSocket("ws://192.168.1.50:8765");
+
+
+    positionSocket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.lat && data.lon) {
+        const latlng = [data.lat, data.lon];
+        currentMarker.setLatLng(latlng);
+        map.setView(latlng, map.getZoom());
+      }
+    };
+
+    // ผู้ใช้คลิกบนแผนที่เพื่อตั้งจุดหมายปลายทาง
+    map.on('click', function(e) {
+      const lat = e.latlng.lat;
+      const lon = e.latlng.lng;
+
+      if (destinationMarker) {
+        destinationMarker.setLatLng([lat, lon]);
+      } else {
+        destinationMarker = L.marker([lat, lon], { color: 'red' }).addTo(map)
+          .bindPopup('🎯 จุดหมายปลายทาง').openPopup();
+      }
+
+      // ส่งจุดหมายปลายทางไปยัง ROS
+      const ws = new WebSocket("ws://<ROS_IP>:8765"); // ใช้ WebSocket เดียวกับที่ ROS เปิดไว้รับข้อมูล
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ lat: lat, lon: lon }));
+        ws.close();
+      };
+    });
+  </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>📍 Golf Cart Map Navigation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body { height: 100%; margin: 0; padding: 0; font-family: sans-serif; }
+    #map { height: 100%; width: 100%; }
+    .status { position: absolute; top: 10px; right: 10px; background: #f44336; color: white; padding: 8px 12px; border-radius: 8px; font-weight: bold; z-index: 1000; }
+    .status.connected { background: #4CAF50; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="status" class="status">Disconnected</div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([13.65, 100.492], 17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let currentMarker = L.marker([13.65, 100.492]).addTo(map).bindPopup('🚗 ตำแหน่งปัจจุบัน').openPopup();
+    let destinationMarker = null;
+
+    const statusEl = document.getElementById('status');
+    const ws = new WebSocket('ws://192.168.1.50:8765');
+
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected';
+      statusEl.classList.add('connected');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.lat && data.lon) {
+        const latlng = [data.lat, data.lon];
+        currentMarker.setLatLng(latlng);
+        map.setView(latlng);
+      }
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = 'Disconnected';
+      statusEl.classList.remove('connected');
+    };
+
+    map.on('click', function(e) {
+      const lat = e.latlng.lat;
+      const lon = e.latlng.lng;
+
+      if (destinationMarker) {
+        destinationMarker.setLatLng([lat, lon]);
+      } else {
+        destinationMarker = L.marker([lat, lon], { color: 'red' }).addTo(map).bindPopup('🎯 จุดหมายปลายทาง').openPopup();
+      }
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ lat: lat, lon: lon }));
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,288 @@
+<!-- <!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สร้าง QR Code สำหรับแผนที่</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .qr-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .qr-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .qr-code {
+            margin-top: 10px;
+        }
+        select {
+            padding: 8px;
+            font-size: 16px;
+        }
+        .header {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .download-links {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>สร้าง QR Code สำหรับแผนที่แบบโต้ตอบ</h1>
+        <p>สร้าง QR Code สำหรับจุดนำทางในมหาวิทยาลัย</p>
+    </div>
+    
+    <div class="container">
+        <div>
+            <label for="baseUrl">URL หลัก (เปลี่ยนเป็น URL ของเซิร์ฟเวอร์ของคุณ):</label>
+            <input type="text" id="baseUrl" value="http://192.168.1.184/maptest.html" style="width: 300px; padding: 8px;">
+        </div>
+        
+        <div>
+            <button onclick="generateMainQR()">สร้าง QR Code สำหรับหน้าหลัก</button>
+        </div>
+        
+        <div id="mainQR" style="display: none;">
+            <h2>QR Code สำหรับหน้าหลัก</h2>
+            <div class="qr-item">
+                <div>หน้าแผนที่แบบโต้ตอบ</div>
+                <div class="qr-code" id="main-qrcode"></div>
+                <div class="download-links">
+                    <button onclick="downloadQR('main-qrcode')">ดาวน์โหลด QR Code</button>
+                </div>
+            </div>
+        </div>
+        
+        <div>
+            <button onclick="generateAllQRs()">สร้าง QR Code สำหรับทุกอาคาร</button>
+        </div>
+        
+        <div id="allQRs" style="display: none;">
+            <h2>QR Code สำหรับทุกอาคาร</h2>
+            <div class="qr-container" id="qr-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // รายชื่ออาคารทั้งหมดพร้อมรายละเอียด
+        const buildings = [
+            { id: "S14", name: "S14 - King Mongkut's 190th Anniversary Memorial Building" },
+            { id: "S13", name: "S13 - Classroom Building 3" },
+            { id: "S12", name: "S12 - Classroom Building 4" },
+            { id: "S11", name: "S11 - Classroom Building 5" },
+            { id: "S15", name: "S15 - Department of Chemical Engineering Building" },
+            { id: "N19", name: "N19 - Production Engineering Laboratory Building 5" },
+            { id: "N20", name: "N20 - Classroom Building 1" }
+        ];
+        
+        // ฟังก์ชันสร้าง QR Code สำหรับหน้าหลัก
+        function generateMainQR() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            
+            // ล้าง QR Code เดิม
+            document.getElementById('main-qrcode').innerHTML = '';
+            
+            // สร้าง QR Code ใหม่
+            new QRCode(document.getElementById('main-qrcode'), {
+                text: baseUrl,
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            // แสดง QR Code
+            document.getElementById('mainQR').style.display = 'block';
+        }
+        
+        // ฟังก์ชันสร้าง QR Code สำหรับทุกอาคาร
+        function generateAllQRs() {
+            const baseUrl = document.getElementById('baseUrl').value;
+            const container = document.getElementById('qr-container');
+            container.innerHTML = '';
+            
+            buildings.forEach(building => {
+                // สร้างองค์ประกอบ
+                const qrItem = document.createElement('div');
+                qrItem.className = 'qr-item';
+                
+                const nameDiv = document.createElement('div');
+                nameDiv.textContent = building.name;
+                qrItem.appendChild(nameDiv);
+                
+                const qrDiv = document.createElement('div');
+                qrDiv.className = 'qr-code';
+                qrDiv.id = `qr-${building.id}`;
+                qrItem.appendChild(qrDiv);
+                
+                const downloadDiv = document.createElement('div');
+                downloadDiv.className = 'download-links';
+                
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = 'ดาวน์โหลด';
+                downloadBtn.onclick = function() { downloadQR(`qr-${building.id}`); };
+                downloadDiv.appendChild(downloadBtn);
+                
+                qrItem.appendChild(downloadDiv);
+                container.appendChild(qrItem);
+                
+                // สร้าง QR Code
+                new QRCode(qrDiv, {
+                    text: baseUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            });
+            
+            // แสดงคอนเทนเนอร์
+            document.getElementById('allQRs').style.display = 'block';
+        }
+        
+        // ฟังก์ชันดาวน์โหลด QR Code เป็นรูปภาพ
+        function downloadQR(id) {
+            const canvas = document.querySelector(`#${id} canvas`);
+            if (canvas) {
+                const url = canvas.toDataURL("image/png");
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `qr-code-${id}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        }
+    </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Campus Map UI</title>
+    <style>
+        body {
+            background: url('assets/images/104439109_10157371513388581_3048654716169080871_n.png') no-repeat center center fixed;
+            background-size: cover;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        select, button {
+            padding: 12px;
+            margin: 15px 0;
+            width: 100%;
+            max-width: 300px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        img {
+            width: 100%;
+            max-width: 300px;
+            margin-bottom: 25px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Campus Map</h1>
+        <img src="assets/images/Untitled_design-Photoroom.png" alt="Campus Map">
+        <label for="destination">Select Destination:</label>
+        <select id="destination">
+            <option value="A">Faculty of Engineering</option>
+            <option value="B">Faculty of Science</option>
+            <option value="C">Central Library</option>
+            <option value="D">Canteen</option>
+        </select>
+        <button onclick="goToMap()">GO</button>
+    </div>
+
+    <audio id="startSound" src="assets/audio/newhello.mp3"></audio>
+
+    <script>
+        function goToMap() {
+            const sound = document.getElementById('startSound');
+            sound.play();
+            const destination = document.getElementById('destination').value;
+            setTimeout(() => {
+                window.location.href = `map.html?destination=${encodeURIComponent(destination)}`;
+            }, 1000); // หน่วงเวลานิดนึงให้เสียงเล่น
+        }
+    </script>
+</body>
+</html>

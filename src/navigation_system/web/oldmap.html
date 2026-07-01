@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🗺️ Path Progression Pure Pursuit Navigation (Fixed Layout)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        body, html { height: 100%; margin: 0; font-family: Arial, sans-serif; background: #1a1a1a; }
+        #map { width: 100%; height: 100%; }
+        
+        /* 🔧 Fixed: Navigation Panel ด้านบน - เพิ่มพื้นที่ให้แสดง stats */
+        .info-panel {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white; padding: 15px; border-radius: 12px; 
+            box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+            text-align: center; width: 400px; backdrop-filter: blur(10px);
+            min-height: 220px; /* เพิ่มความสูงให้แสดง stats ครบ */
+            box-sizing: border-box;
+        }
+        
+        .info-panel h3 {
+            margin: 0 0 8px 0; font-size: 16px; font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        /* 🔧 Fixed: Status ด้านบนขวา - เลื่อนลงเล็กน้อย */
+        .status {
+            position: absolute; top: 10px; right: 10px; z-index: 1100;
+            padding: 6px 12px; border-radius: 20px; font-weight: bold;
+            backdrop-filter: blur(10px); transition: all 0.3s ease;
+            font-size: 12px;
+        }
+        .connected { 
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            color: white; box-shadow: 0 4px 15px rgba(76,175,80,0.4);
+        }
+        .disconnected { 
+            background: linear-gradient(135deg, #f44336, #d32f2f); 
+            color: white; box-shadow: 0 4px 15px rgba(244,67,54,0.4);
+        }
+        
+        /* 🔧 Fixed: Controls ด้านขวา - เลื่อนลงไม่ให้ซ้อนกับ status */
+        .controls {
+            position: absolute; top: 50px; right: 10px; z-index: 1050;
+            background: rgba(255,255,255,0.95); padding: 10px; border-radius: 12px;
+            backdrop-filter: blur(10px); box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            border: none; color: white; padding: 6px 12px;
+            margin: 2px; cursor: pointer; border-radius: 20px; font-size: 11px;
+            transition: all 0.3s ease; box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            font-weight: 600;
+        }
+        .btn:hover { 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .btn.stop { background: linear-gradient(135deg, #f44336, #d32f2f); }
+        .btn.pause { background: linear-gradient(135deg, #ff9800, #f57c00); }
+        .btn.debug { background: linear-gradient(135deg, #9c27b0, #7b1fa2); }
+        
+        /* 🔧 Progress bar ที่เล็กลง */
+        .progress {
+            width: 100%; height: 16px; background: rgba(255,255,255,0.2); 
+            border-radius: 8px; margin: 8px 0; overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #00ff88, #00cc70);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); 
+            border-radius: 8px; position: relative;
+            box-shadow: 0 0 15px rgba(0,255,136,0.5);
+        }
+        
+        .progress-segments {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center;
+        }
+        .segment {
+            height: 40%; border-right: 1px solid rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+        }
+        .segment.completed { background: rgba(0,255,136,0.3); }
+        .segment.approaching { background: rgba(255,193,7,0.3); }
+        
+        .speed { 
+            font-size: 14px; font-weight: bold; margin: 6px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        /* 🔧 Stats ที่แสดงผลชัดเจน */
+        .stats {
+            display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;
+            margin-top: 12px; font-size: 11px;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.15); padding: 8px;
+            border-radius: 6px; text-align: center;
+            line-height: 1.3;
+        }
+        .stat-item div:first-child {
+            font-size: 10px;
+            opacity: 0.9;
+            margin-bottom: 2px;
+        }
+        .stat-item div:last-child {
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .progression-stats {
+            background: rgba(255,255,255,0.15); padding: 8px;
+            border-radius: 6px; margin-top: 8px; font-size: 10px;
+        }
+        
+        /* 🔧 Fixed: Vehicle params ด้านซ้ายล่าง - แยกกันชัดเจน */
+        .vehicle-params {
+            position: absolute; bottom: 200px; left: 10px; z-index: 1000;
+            background: rgba(76,175,80,0.9); color: white; padding: 10px;
+            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 10px;
+            backdrop-filter: blur(5px); border: 1px solid #4CAF50;
+            max-width: 200px;
+        }
+        
+        /* 🔧 Fixed: GNSS Status ด้านซ้ายล่าง - ห่างจาก vehicle-params */
+        .gnss-status {
+            position: absolute; bottom: 90px; left: 10px; z-index: 1000;
+            background: rgba(33,150,243,0.95); color: white; padding: 10px;
+            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 9px;
+            backdrop-filter: blur(5px); border: 1px solid #2196F3;
+            max-width: 200px;
+        }
+        
+        /* 🔧 Fixed: Debug panel ด้านล่าง - ไม่ซ้อนกับอื่น */
+        .debug {
+            position: absolute; bottom: 10px; left: 220px; z-index: 1000;
+            background: rgba(0,0,0,0.9); color: #00ff88; padding: 10px;
+            border-radius: 8px; font-family: 'Courier New', monospace; font-size: 9px;
+            max-width: 350px; display: none; border: 1px solid #00ff88;
+            backdrop-filter: blur(5px); max-height: 250px; overflow-y: auto;
+        }
+        
+        /* 🔧 Fixed: Debug button ไม่ซ้อนกับอื่น */
+        .debug-btn {
+            position: absolute; bottom: 10px; right: 10px; z-index: 1100;
+            background: rgba(0,0,0,0.8); color: #00ff88; border: 1px solid #00ff88;
+            padding: 6px 12px; border-radius: 4px; cursor: pointer;
+            font-family: monospace; transition: all 0.3s ease; font-size: 11px;
+        }
+        .debug-btn:hover {
+            background: rgba(0,255,136,0.1);
+            box-shadow: 0 0 8px rgba(0,255,136,0.3);
+        }
+        
+        /* Modal */
+        .arrival-modal {
+            display: none; position: fixed; z-index: 10000; left: 0; top: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white; margin: 15% auto; padding: 30px; border-radius: 20px;
+            width: 450px; text-align: center; 
+            animation: modalSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+        }
+        
+        @keyframes modalSlideIn {
+            from { transform: translateY(-80px) scale(0.9); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        
+        .modal-header { 
+            font-size: 28px; margin-bottom: 15px; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .modal-message { font-size: 16px; margin-bottom: 25px; line-height: 1.4; }
+        .modal-btn {
+            padding: 12px 25px; border: none; border-radius: 20px;
+            font-size: 14px; cursor: pointer; margin: 6px; font-weight: 600;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.2); color: white;
+        }
+        .modal-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255,255,255,0.3);
+        }
+        
+        /* Enhanced path visualization */
+        .lookahead-circle {
+            stroke: #FF5722;
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 5,5;
+            animation: dashMove 2s linear infinite;
+        }
+        
+        @keyframes dashMove {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 20; }
+        }
+        
+        .path-line {
+            stroke: #2196F3;
+            stroke-width: 4;
+            fill: none;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 6px rgba(33, 150, 243, 0.6));
+        }
+        
+        .raw-path-line {
+            stroke: #FF5722;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            stroke-dasharray: 10,5;
+        }
+        
+        .smooth-path-line {
+            stroke: #4CAF50;
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+        }
+        
+        .completed-path-line {
+            stroke: #00ff88;
+            stroke-width: 5;
+            fill: none;
+            stroke-linecap: round;
+            opacity: 0.8;
+            filter: drop-shadow(0 0 8px rgba(0,255,136,0.8));
+        }
+        
+        .robot-marker {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .lookahead-marker {
+            transition: all 0.2s ease-out;
+        }
+        
+        /* Hide Leaflet Routing Machine control panel */
+        .leaflet-routing-container {
+            display: none !important;
+        }
+        
+        /* Status indicators */
+        .status-good { color: #4CAF50; }
+        .status-warning { color: #FF9800; }
+        .status-error { color: #F44336; }
+        
+        .metric { margin: 1px 0; }
+        
+        /* 🔧 Responsive adjustments */
+        @media (max-width: 1200px) {
+            .info-panel { width: 320px; padding: 10px; }
+            .gnss-status, .vehicle-params { max-width: 160px; font-size: 8px; }
+            .debug { max-width: 280px; left: 180px; }
+        }
+        
+        @media (max-width: 800px) {
+            .info-panel { 
+                width: 300px; padding: 8px; 
+                max-height: 160px; /* จำกัดความสูงบนมือถือ */
+            }
+            .gnss-status, .vehicle-params { 
+                max-width: 140px; font-size: 7px; padding: 6px;
+            }
+            /* Stack vertically on mobile */
+            .vehicle-params { bottom: 140px; left: 10px; }
+            .gnss-status { bottom: 70px; left: 10px; }
+            .debug { display: none !important; } /* Hide debug on mobile */
+            .controls { top: 40px; right: 5px; padding: 6px; }
+        }
+        
+        @media (max-width: 600px) {
+            .info-panel { 
+                width: 260px; padding: 6px; 
+                top: 5px; /* เลื่อนขึ้นบนมือถือ */
+            }
+            .info-panel h3 { font-size: 14px; margin-bottom: 4px; }
+            .speed { font-size: 12px; margin: 4px 0; }
+            .stats { font-size: 8px; gap: 4px; }
+            .stat-item { padding: 2px; }
+            
+            /* Stack ให้แยกกันชัดเจนบนมือถือ */
+            .vehicle-params { 
+                bottom: 160px; left: 5px; 
+                max-width: 120px; font-size: 6px; padding: 4px;
+            }
+            .gnss-status { 
+                bottom: 80px; left: 5px; 
+                max-width: 120px; font-size: 6px; padding: 4px;
+            }
+            .debug-btn { bottom: 5px; right: 5px; font-size: 9px; padding: 4px 8px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 🔧 Fixed Layout: Navigation Panel ด้านบน -->
+    <div class="info-panel" id="infoPanel">
+        <h3>🗺️ Path Progression Pure Pursuit Navigation</h3>
+        <div id="destinationInfo">รอการเชื่อมต่อ...</div>
+        <div class="speed" id="speedDisplay">ความเร็ว: 0.0 m/s</div>
+        <div class="progress">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            <div class="progress-segments" id="progressSegments"></div>
+        </div>
+        <div id="progressText" style="font-size: 11px; margin: 4px 0;">ความก้าวหน้า: 0%</div>
+        
+        <div class="progression-stats" id="progressionStats" style="display: none;">
+            <div><strong>🗺️ Path Progression Status</strong></div>
+            <div id="progressionDetails">Initializing...</div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <div>📏 ระยะทาง</div>
+                <div id="totalDistance">0.0 m</div>
+            </div>
+            <div class="stat-item">
+                <div>⏱️ เวลา</div>
+                <div id="elapsedTime">00:00</div>
+            </div>
+            <div class="stat-item">
+                <div>🎯 ถึงจุดหมาย</div>
+                <div id="distanceToDest">- m</div>
+            </div>
+            <div class="stat-item">
+                <div>📊 Cross-track</div>
+                <div id="crossTrackError">- m</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 🔧 Fixed: Status ด้านบนขวา -->
+    <div class="status disconnected" id="statusIndicator">Disconnected</div>
+    
+    <!-- 🔧 Fixed: Controls ไม่ซ้อนกับ status -->
+    <div class="controls" id="controls">
+        <button class="btn" onclick="startNav()">🚀 Start</button>
+        <button class="btn pause" onclick="pauseNav()">⏸️ Pause</button>
+        <button class="btn stop" onclick="stopNav()">🛑 Stop</button>
+        <button class="btn debug" onclick="togglePathDebug()">🔍 Debug Paths</button>
+        <button class="btn debug" onclick="toggleProgression()">🗺️ Progression</button>
+    </div>
+    
+    <!-- 🔧 Fixed: Vehicle params ด้านซ้ายล่าง (ไม่ซ้อนกับ GNSS) -->
+    <div class="vehicle-params">
+        <div><strong>🚗 Vehicle Parameters</strong></div>
+        <div>Wheelbase: 1.67m</div>
+        <div>Max Steering: ±50°</div>
+        <div>Algorithm: <span id="algorithm">Path Progression</span></div>
+        <div>Lookahead: <span id="lookaheadDist">3.0m</span></div>
+        <div>Coordinate: UTM 47N</div>
+        <div>Forward Guarantee: <span id="forwardGuarantee" class="status-good">ON</span></div>
+    </div>
+    
+    <!-- 🔧 Fixed: GNSS Status ด้านซ้ายล่าง (ไม่ซ้อนกับ vehicle-params) -->
+    <div class="gnss-status" id="gnssStatus">
+        <div><strong>📡 Enhanced GNSS Status</strong></div>
+        <div class="metric">Heading Source: <span id="headingSource" class="status-warning">GPS</span></div>
+        <div class="metric">NAV-ATT: <span id="navAttStatus" class="status-warning">Calibrating</span></div>
+        <div class="metric">Fusion Mode: <span id="fusionMode" class="status-warning">INIT</span></div>
+        <div class="metric">pyubx2: <span id="pyubx2Status" class="status-good">Available</span></div>
+        <div class="metric">Heading Accuracy: <span id="headingAccuracy">±5.0°</span></div>
+        <div class="metric">IMU Cal: <span id="imuCalibration" class="status-warning">Progress</span></div>
+    </div>
+    
+    <!-- Modal -->
+    <div class="arrival-modal" id="arrivalModal">
+        <div class="modal-content">
+            <div class="modal-header">🎉 ถึงจุดหมายแล้ว!</div>
+            <div class="modal-message" id="arrivalMessage">
+                การนำทางด้วย Path Progression Pure Pursuit สำเร็จเรียบร้อย!
+            </div>
+            <button class="modal-btn" onclick="closeModal()">✨ ปิด</button>
+            <button class="modal-btn" onclick="goHome()">🏠 กลับหน้าแรก</button>
+        </div>
+    </div>
+    
+    <!-- 🔧 Fixed: Debug panel ไม่ซ้อนกับอื่น -->
+    <div class="debug" id="debugPanel">
+        <div><strong>🗺️ Enhanced Path Progression Debug</strong></div>
+        <div id="debugContent">Initializing Enhanced Path Progression system...</div>
+    </div>
+    
+    <!-- 🔧 Fixed: Debug button ไม่ซ้อน -->
+    <button class="debug-btn" onclick="toggleDebug()">🗺️ Debug</button>
+    
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        let map, userMarker, destMarker, lookaheadMarker;
+        let socket = null;
+        let pathPolyline = null;
+        let rawPathPolyline = null;
+        let smoothPathPolyline = null;
+        let completedPathPolyline = null;
+        let lookaheadCircle = null;
+        let navigationActive = false;
+        let destination = null;
+        let debugVisible = false;
+        let pathDebugVisible = false;
+        let progressionVisible = false;
+        let debugLogs = [];
+        let navigationStartTime = 0;
+        let routingControl = null;
+        
+        // Enhanced coordinate system
+        const REFERENCE_LAT = 13.650748;
+        const REFERENCE_LON = 100.492985;
+        let referenceUTM = null;
+        
+        // Path progression tracking
+        let pathProgressionData = null;
+        let progressSegments = [];
+        
+        // Available destinations
+        const destinations = {
+            "S14": { lat: 13.650940, lon: 100.492070, name: "King Mongkut's 190th Anniversary Building" },
+            "S13": { lat: 13.650076, lon: 100.492140, name: "Classroom Building 3" },
+            "S12": { lat: 13.649913, lon: 100.492690, name: "Classroom Building 4" },
+            "S11": { lat: 13.649992, lon: 100.493327, name: "Classroom Building 5" },
+            "S15": { lat: 13.650154, lon: 100.492984, name: "Department of Chemical Engineering Building" },
+            "N19": { lat: 13.651010, lon: 100.492980, name: "Production Engineering Laboratory Building 5" },
+            "N20": { lat: 13.6513894, lon: 100.4929824, name: "Classroom Building 1" }
+        };
+        
+        // Coordinate functions
+        function initCoordinateSystem() {
+            const lon = REFERENCE_LON;
+            const lat = REFERENCE_LAT;
+            
+            const zoneNumber = Math.floor((lon + 180) / 6) + 1;
+            const centralMeridian = (zoneNumber - 1) * 6 - 180 + 3;
+            
+            const latRad = lat * Math.PI / 180;
+            const lonRad = (lon - centralMeridian) * Math.PI / 180;
+            
+            const N = 6378137 / Math.sqrt(1 - 0.00669437999014 * Math.sin(latRad) * Math.sin(latRad));
+            const M = 6378137 * ((1 - 0.00669437999014/4 - 3*0.00669437999014*0.00669437999014/64) * latRad);
+            
+            const utmX = 500000 + N * (lonRad + (1-Math.tan(latRad)*Math.tan(latRad)+0.006739496742*Math.cos(latRad)*Math.cos(latRad))*lonRad*lonRad*lonRad/6);
+            const utmY = M + N * Math.tan(latRad) * (lonRad*lonRad/2);
+            
+            referenceUTM = { x: utmX, y: utmY };
+            addDebugLog(`🔧 Enhanced coordinate system initialized: UTM(${utmX.toFixed(2)}, ${utmY.toFixed(2)})`);
+        }
+        
+        function latlonToXY(lat, lon) {
+            if (!referenceUTM) return { x: 0, y: 0 };
+            
+            const dlat = lat - REFERENCE_LAT;
+            const dlon = lon - REFERENCE_LON;
+            
+            const x = dlon * 111319.9 * Math.cos(lat * Math.PI / 180);
+            const y = dlat * 111319.9;
+            
+            return { x: x, y: y };
+        }
+        
+        function xyToLatLon(x, y) {
+            const dlat = y / 111319.9;
+            const dlon = x / (111319.9 * Math.cos((REFERENCE_LAT + dlat) * Math.PI / 180));
+            
+            return {
+                lat: REFERENCE_LAT + dlat,
+                lon: REFERENCE_LON + dlon
+            };
+        }
+        
+        function initMap() {
+            addDebugLog("🗺️ Initializing Enhanced Path Progression navigation system...");
+            
+            initCoordinateSystem();
+            
+            map = L.map('map', {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([13.6509, 100.4929], 18);
+            
+            // Dark theme map
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© CartoDB © OpenStreetMap',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+            
+            // Auto-set destination from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const destParam = urlParams.get('destination');
+            if (destParam) {
+                const buildingCode = destParam.split(' ')[0];
+                if (destinations[buildingCode]) {
+                    setTimeout(() => setDestination(buildingCode), 1000);
+                }
+            }
+            
+            connectWebSocket();
+        }
+        
+        async function connectWebSocket() {
+            const servers = ['localhost:5001', 'localhost:5000', '127.0.0.1:5001'];
+            addDebugLog("🔍 Searching for Enhanced Path Progression server...");
+            
+            for (let server of servers) {
+                try {
+                    addDebugLog(`Testing ${server}...`);
+                    socket = new WebSocket(`ws://${server}`);
+                    
+                    const connected = await new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            socket.close();
+                            resolve(false);
+                        }, 2000);
+                        
+                        socket.onopen = () => {
+                            clearTimeout(timeout);
+                            resolve(true);
+                        };
+                        
+                        socket.onerror = () => {
+                            clearTimeout(timeout);
+                            resolve(false);
+                        };
+                    });
+                    
+                    if (connected) {
+                        addDebugLog(`✅ Connected to Enhanced Path Progression server: ${server}`);
+                        setupSocketHandlers();
+                        updateStatus('connected', `Enhanced Path Progression Server (${server})`);
+                        return;
+                    }
+                } catch (e) {
+                    addDebugLog(`❌ ${server} failed`);
+                    continue;
+                }
+            }
+            
+            addDebugLog("❌ No Enhanced Path Progression servers found");
+            updateStatus('disconnected', 'No server found');
+            showConnectionHelp();
+        }
+        
+        function setupSocketHandlers() {
+            socket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    processData(data);
+                } catch (e) {
+                    addDebugLog(`Message error: ${e.message}`);
+                }
+            };
+            
+            socket.onclose = function() {
+                addDebugLog("Connection closed");
+                updateStatus('disconnected', 'Disconnected');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            socket.onerror = function(error) {
+                addDebugLog(`Socket error: ${error.message || 'Unknown'}`);
+            };
+        }
+        
+        function processData(data) {
+            if (data.latitude && data.longitude) {
+                updateUserPosition(data.latitude, data.longitude, data.current_heading || 0);
+                
+                navigationActive = data.navigation_active || false;
+                
+                // Update UI
+                if (data.current_speed !== undefined) {
+                    updateSpeed(data.current_speed);
+                }
+                
+                if (data.route_progress !== undefined) {
+                    updateProgress(data.route_progress);
+                }
+                
+                if (data.distance_to_destination !== undefined) {
+                    updateDistanceToDest(data.distance_to_destination);
+                }
+                
+                if (data.distance_traveled !== undefined) {
+                    updateTotalDistance(data.distance_traveled);
+                }
+                
+                if (data.cross_track_error !== undefined) {
+                    updateCrossTrackError(data.cross_track_error);
+                }
+                
+                // Update lookahead marker and circle
+                if (data.lookahead_lat && data.lookahead_lon) {
+                    updateLookaheadVisualization(data.lookahead_lat, data.lookahead_lon, data.lookahead_distance || 3.0);
+                }
+                
+                // Update path progression
+                if (data.progression) {
+                    updatePathProgression(data.progression);
+                }
+                
+                // Update enhanced GNSS status
+                updateGNSSStatus(data);
+                
+                // Debug path visualization
+                if (data.debug_path && pathDebugVisible) {
+                    updatePathDebugVisualization(data.debug_path);
+                }
+                
+                updateElapsedTime();
+            }
+            
+            if (data.route_received) {
+                handleRouteReceived(data);
+            }
+            
+            if (data.navigation_started) {
+                addDebugLog("🚀 Enhanced Path Progression navigation started");
+                navigationStartTime = Date.now();
+                updateInfo('🗺️ Path Progression Active', 'กำลังติดตามด้วย Google Maps style progression');
+            }
+            
+            if (data.arrived) {
+                addDebugLog("🎉 Arrived via Path Progression");
+                showArrivalModal(data);
+            }
+        }
+        
+        function handleRouteReceived(data) {
+            addDebugLog(`🗺️ Enhanced Path Progression route: ${data.smooth_points} points`);
+            addDebugLog(`🔧 Algorithm: ${data.algorithm || 'Path Progression Pure Pursuit'}`);
+            
+            if (data.progression_segments) {
+                addDebugLog(`🗺️ Progression segments: ${data.progression_segments}`);
+                createProgressSegments(data.progression_segments);
+            }
+            
+            document.getElementById('controls').style.display = 'block';
+            updateInfo('🗺️ Path Progression Route พร้อม', `${data.smooth_points} จุด, Progression: ${data.progression_segments || 0} segments`);
+            
+            // Update vehicle parameters
+            if (data.wheelbase) {
+                document.getElementById('algorithm').textContent = data.algorithm || 'Path Progression Pure Pursuit';
+            }
+        }
+        
+        // Path progression functions
+        function createProgressSegments(numSegments) {
+            const container = document.getElementById('progressSegments');
+            container.innerHTML = '';
+            
+            progressSegments = [];
+            
+            for (let i = 0; i < numSegments; i++) {
+                const segment = document.createElement('div');
+                segment.className = 'segment';
+                segment.style.width = `${100/numSegments}%`;
+                segment.id = `segment-${i}`;
+                
+                container.appendChild(segment);
+                progressSegments.push(segment);
+            }
+            
+            addDebugLog(`🗺️ Created ${numSegments} progress segments`);
+        }
+        
+        function updatePathProgression(progressionData) {
+            pathProgressionData = progressionData;
+            
+            // Update forward guarantee indicator
+            const forwardGuaranteeEl = document.getElementById('forwardGuarantee');
+            if (forwardGuaranteeEl) {
+                forwardGuaranteeEl.textContent = progressionData.forward_guarantee ? 'ON' : 'OFF';
+                forwardGuaranteeEl.className = progressionData.forward_guarantee ? 'status-good' : 'status-warning';
+            }
+            
+            // Update segment status
+            if (progressionData.segment_status && progressSegments.length > 0) {
+                Object.entries(progressionData.segment_status).forEach(([segmentId, segment]) => {
+                    const segmentEl = document.getElementById(`segment-${segmentId}`);
+                    if (segmentEl) {
+                        segmentEl.className = `segment ${segment.status}`;
+                        
+                        // Add visual feedback
+                        if (segment.status === 'completed') {
+                            segmentEl.style.background = 'rgba(0,255,136,0.6)';
+                        } else if (segment.status === 'approaching') {
+                            segmentEl.style.background = 'rgba(255,193,7,0.6)';
+                        } else if (segment.status === 'passed') {
+                            segmentEl.style.background = 'rgba(76,175,80,0.4)';
+                        }
+                    }
+                });
+            }
+            
+            // Update progression stats
+            if (progressionVisible) {
+                updateProgressionStats(progressionData);
+            }
+        }
+        
+        function updateProgressionStats(progressionData) {
+            const statsEl = document.getElementById('progressionDetails');
+            if (!statsEl) return;
+            
+            const completedSegments = progressionData.completed_segments || 0;
+            const totalSegments = progressionData.total_segments || 0;
+            const maxProgress = progressionData.max_progress || 0;
+            const lastProgressTime = progressionData.last_progress_time || 0;
+            
+            const timeSinceProgress = lastProgressTime > 0 ? (Date.now() / 1000 - lastProgressTime) : 0;
+            
+            statsEl.innerHTML = `
+                <div>Completed: ${completedSegments}/${totalSegments} segments</div>
+                <div>Max Progress: ${maxProgress.toFixed(1)}m</div>
+                <div>Last Progress: ${timeSinceProgress.toFixed(1)}s ago</div>
+                <div>Forward Guarantee: ${progressionData.forward_guarantee ? '✅' : '❌'}</div>
+            `;
+        }
+        
+        function toggleProgression() {
+            progressionVisible = !progressionVisible;
+            const statsEl = document.getElementById('progressionStats');
+            
+            if (progressionVisible) {
+                statsEl.style.display = 'block';
+                if (pathProgressionData) {
+                    updateProgressionStats(pathProgressionData);
+                }
+                addDebugLog("🗺️ Path progression visualization ON");
+            } else {
+                statsEl.style.display = 'none';
+                addDebugLog("🗺️ Path progression visualization OFF");
+            }
+        }
+        
+        // Enhanced GNSS status update
+        function updateGNSSStatus(data) {
+            // Update heading source
+            const headingSourceEl = document.getElementById('headingSource');
+            const source = data.heading_source || 'UNKNOWN';
+            
+            if (headingSourceEl) {
+                headingSourceEl.textContent = source;
+                if (source.includes('NAV_ATT')) {
+                    headingSourceEl.className = 'status-good';
+                } else if (source === 'GPS') {
+                    headingSourceEl.className = 'status-warning';
+                } else {
+                    headingSourceEl.className = 'status-error';
+                }
+            }
+            
+            // Update other GNSS status indicators
+            const indicators = [
+                { id: 'navAttStatus', key: 'nav_att_status', goodValues: ['FULLY_CALIBRATED', 'CALIBRATED'] },
+                { id: 'fusionMode', key: 'fusion_mode', goodValues: ['FUSION'] },
+                { id: 'imuCalibration', key: 'imu_calibration', goodValues: ['FULLY_CALIBRATED', 'CALIBRATED'] }
+            ];
+            
+            indicators.forEach(indicator => {
+                const el = document.getElementById(indicator.id);
+                if (el && data[indicator.key]) {
+                    el.textContent = data[indicator.key];
+                    if (indicator.goodValues.includes(data[indicator.key])) {
+                        el.className = 'status-good';
+                    } else if (data[indicator.key].includes('CALIBRATING') || data[indicator.key] === 'INIT') {
+                        el.className = 'status-warning';
+                    } else {
+                        el.className = 'status-error';
+                    }
+                }
+            });
+            
+            // Update heading accuracy
+            const headingAccEl = document.getElementById('headingAccuracy');
+            if (headingAccEl && data.heading_accuracy) {
+                headingAccEl.textContent = `±${data.heading_accuracy.toFixed(1)}°`;
+            }
+        }
+        
+        // Enhanced path visualization
+        function updatePathDebugVisualization(debugPath) {
+            try {
+                // Show raw path
+                if (debugPath.raw_points && debugPath.raw_points.length > 0) {
+                    if (rawPathPolyline) {
+                        map.removeLayer(rawPathPolyline);
+                    }
+                    
+                    const rawLatLngs = debugPath.raw_points.map(p => {
+                        const coord = xyToLatLon(p[0], p[1]);
+                        return [coord.lat, coord.lon];
+                    });
+                    
+                    rawPathPolyline = L.polyline(rawLatLngs, {
+                        color: '#FF5722',
+                        weight: 2,
+                        className: 'raw-path-line',
+                        opacity: 0.8
+                    }).addTo(map);
+                }
+                
+                // Show smooth path
+                if (debugPath.smooth_points && debugPath.smooth_points.length > 0) {
+                    if (smoothPathPolyline) {
+                        map.removeLayer(smoothPathPolyline);
+                    }
+                    
+                    const smoothLatLngs = debugPath.smooth_points.map(p => {
+                        const coord = xyToLatLon(p[0], p[1]);
+                        return [coord.lat, coord.lon];
+                    });
+                    
+                    smoothPathPolyline = L.polyline(smoothLatLngs, {
+                        color: '#4CAF50',
+                        weight: 3,
+                        className: 'smooth-path-line',
+                        opacity: 0.9
+                    }).addTo(map);
+                }
+                
+                // Show completed path
+                if (debugPath.completed_points && debugPath.completed_points.length > 0) {
+                    if (completedPathPolyline) {
+                        map.removeLayer(completedPathPolyline);
+                    }
+                    
+                    const completedLatLngs = debugPath.completed_points.map(p => {
+                        const coord = xyToLatLon(p[0], p[1]);
+                        return [coord.lat, coord.lon];
+                    });
+                    
+                    completedPathPolyline = L.polyline(completedLatLngs, {
+                        color: '#00ff88',
+                        weight: 5,
+                        className: 'completed-path-line',
+                        opacity: 0.8
+                    }).addTo(map);
+                }
+                
+                addDebugLog(`🔍 Debug paths: Raw(${debugPath.raw_points?.length || 0}), Smooth(${debugPath.smooth_points?.length || 0}), Completed(${debugPath.completed_points?.length || 0})`);
+                
+            } catch (e) {
+                addDebugLog(`❌ Path debug visualization error: ${e.message}`);
+            }
+        }
+        
+        function togglePathDebug() {
+            pathDebugVisible = !pathDebugVisible;
+            
+            if (!pathDebugVisible) {
+                // Hide debug paths
+                [rawPathPolyline, smoothPathPolyline, completedPathPolyline].forEach(polyline => {
+                    if (polyline) {
+                        map.removeLayer(polyline);
+                        polyline = null;
+                    }
+                });
+                addDebugLog("🔍 Path debug visualization OFF");
+            } else {
+                addDebugLog("🔍 Path debug visualization ON");
+            }
+        }
+        
+        function updateUserPosition(lat, lon, heading = 0) {
+            // Enhanced robot icon
+            const robotIcon = L.divIcon({
+                className: 'robot-marker',
+                html: `<div style="width: 30px; height: 30px; position: relative;">
+                         <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #4CAF50, #2E7D32); 
+                                    border: 3px solid white; border-radius: 50%; 
+                                    box-shadow: 0 4px 12px rgba(76,175,80,0.5);
+                                    position: absolute; top: 3px; left: 3px;">
+                         </div>
+                         <div style="position: absolute; top: 0; left: 15px;
+                                    width: 0; height: 0;
+                                    border-left: 4px solid transparent;
+                                    border-right: 4px solid transparent;
+                                    border-bottom: 8px solid #FF5722;
+                                    transform: rotate(${heading}deg);
+                                    transform-origin: center 20px;">
+                         </div>
+                       </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            
+            if (userMarker) {
+                userMarker.setLatLng([lat, lon]);
+                userMarker.setIcon(robotIcon);
+            } else {
+                userMarker = L.marker([lat, lon], { icon: robotIcon })
+                    .addTo(map)
+                    .bindPopup("🤖 Golf Cart (Path Progression)");
+                map.setView([lat, lon], 18);
+            }
+        }
+        
+        function updateLookaheadVisualization(lat, lon, lookaheadDist) {
+            // Update lookahead distance display
+            document.getElementById('lookaheadDist').textContent = `${lookaheadDist.toFixed(1)}m`;
+            
+            // Enhanced lookahead point marker
+            const lookaheadIcon = L.divIcon({
+                className: 'lookahead-marker',
+                html: `<div style="width: 20px; height: 20px; background: linear-gradient(135deg, #FF5722, #D84315); 
+                              border: 2px solid white; border-radius: 50%; 
+                              box-shadow: 0 0 15px rgba(255,87,34,0.8);
+                              animation: lookaheadPulse 2s ease-in-out infinite;">
+                       </div>
+                       <style>
+                         @keyframes lookaheadPulse { 
+                           0%, 100% { transform: scale(1); } 
+                           50% { transform: scale(1.3); } 
+                         }
+                       </style>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            if (lookaheadMarker) {
+                lookaheadMarker.setLatLng([lat, lon]);
+            } else {
+                lookaheadMarker = L.marker([lat, lon], { icon: lookaheadIcon })
+                    .addTo(map)
+                    .bindPopup("🎯 Lookahead Point (Path Progression)");
+            }
+            
+            // Draw lookahead circle
+            if (userMarker && lookaheadDist) {
+                if (lookaheadCircle) {
+                    map.removeLayer(lookaheadCircle);
+                }
+                
+                lookaheadCircle = L.circle(userMarker.getLatLng(), {
+                    radius: lookaheadDist,
+                    className: 'lookahead-circle',
+                    weight: 2,
+                    color: '#FF5722',
+                    fillOpacity: 0
+                }).addTo(map);
+            }
+        }
+        
+        function updateSpeed(speed) {
+            const speedEl = document.getElementById('speedDisplay');
+            speedEl.textContent = `ความเร็ว: ${speed.toFixed(1)} m/s`;
+            
+            if (speed > 1.0) {
+                speedEl.style.color = '#00ff88';
+            } else if (speed > 0.3) {
+                speedEl.style.color = '#ffeb3b';
+            } else {
+                speedEl.style.color = '#ff5722';
+            }
+        }
+        
+        function updateProgress(progress) {
+            const fill = document.getElementById('progressFill');
+            const text = document.getElementById('progressText');
+            const clampedProgress = Math.max(0, Math.min(100, progress));
+            
+            fill.style.width = `${clampedProgress}%`;
+            text.textContent = `ความก้าวหน้า: ${Math.round(clampedProgress)}%`;
+        }
+        
+        function updateDistanceToDest(distance) {
+            const distEl = document.getElementById('distanceToDest');
+            if (distance !== null && distance !== undefined) {
+                distEl.textContent = `${distance.toFixed(1)} m`;
+            } else {
+                distEl.textContent = '- m';
+            }
+        }
+        
+        function updateTotalDistance(distance) {
+            const distEl = document.getElementById('totalDistance');
+            if (distance !== null && distance !== undefined) {
+                if (distance >= 1000) {
+                    distEl.textContent = `${(distance/1000).toFixed(2)} km`;
+                } else {
+                    distEl.textContent = `${distance.toFixed(0)} m`;
+                }
+            }
+        }
+        
+        function updateCrossTrackError(error) {
+            const errorEl = document.getElementById('crossTrackError');
+            if (error !== null && error !== undefined) {
+                errorEl.textContent = `${error.toFixed(1)} m`;
+                
+                // Color coding
+                if (error < 1.0) {
+                    errorEl.style.color = '#4CAF50';
+                } else if (error < 2.0) {
+                    errorEl.style.color = '#FF9800';
+                } else {
+                    errorEl.style.color = '#F44336';
+                }
+            } else {
+                errorEl.textContent = '- m';
+            }
+        }
+        
+        function updateElapsedTime() {
+            if (navigationStartTime === 0 || !navigationActive) return;
+            
+            const elapsed = (Date.now() - navigationStartTime) / 1000;
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = Math.floor(elapsed % 60);
+            
+            document.getElementById('elapsedTime').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function updateInfo(title, subtitle = '') {
+            const panel = document.getElementById('destinationInfo');
+            panel.innerHTML = subtitle ? `${title}<br><small style="opacity: 0.8;">${subtitle}</small>` : title;
+        }
+        
+        function updateStatus(status, message) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.textContent = message;
+            indicator.className = `status ${status}`;
+        }
+        
+        async function setDestination(destCode) {
+            const selectedDest = destinations[destCode];
+            if (!selectedDest) return;
+            
+            destination = selectedDest;
+            updateInfo(`🎯 จุดหมาย: ${destCode}`, selectedDest.name);
+            
+            const destIcon = L.divIcon({
+                className: 'dest-marker',
+                html: `<div style="width: 32px; height: 32px; background: linear-gradient(135deg, #f44336, #d32f2f); 
+                              border: 3px solid white; border-radius: 50%; 
+                              box-shadow: 0 4px 15px rgba(244,67,54,0.6);
+                              display: flex; align-items: center; justify-content: center;
+                              color: white; font-weight: bold; font-size: 16px;">
+                         🎯
+                       </div>`,
+                iconSize: [38, 38],
+                iconAnchor: [19, 19]
+            });
+            
+            if (destMarker) {
+                destMarker.setLatLng([selectedDest.lat, selectedDest.lon]);
+            } else {
+                destMarker = L.marker([selectedDest.lat, selectedDest.lon], { icon: destIcon })
+                    .addTo(map)
+                    .bindPopup(`🎯 ${destCode} - ${selectedDest.name}`);
+            }
+            
+            // Calculate route
+            if (userMarker) {
+                await calculateRouteWithLeaflet(userMarker.getLatLng(), selectedDest);
+            } else {
+                addDebugLog("⏳ Waiting for robot position...");
+            }
+        }
+        
+        async function calculateRouteWithLeaflet(start, end) {
+            try {
+                updateInfo('🗺️ กำลังสร้าง Path Progression route...', 'ใช้ Enhanced Coordinate System');
+                
+                if (routingControl) {
+                    map.removeControl(routingControl);
+                }
+                
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(start.lat, start.lng),
+                        L.latLng(end.lat, end.lon)
+                    ],
+                    routeWhileDragging: false,
+                    addWaypoints: false,
+                    createMarker: function() { return null; },
+                    lineOptions: {
+                        styles: [{ color: 'transparent', weight: 0 }]
+                    },
+                    show: false
+                }).on('routesfound', function(e) {
+                    const routes = e.routes;
+                    if (routes && routes.length > 0) {
+                        const route = routes[0];
+                        const coordinates = route.coordinates;
+                        
+                        // Convert to path format
+                        const pathPoints = coordinates.map(coord => {
+                            const localXY = latlonToXY(coord.lat, coord.lng);
+                            return {
+                                lat: coord.lat, 
+                                lon: coord.lng,
+                                x: localXY.x,
+                                y: localXY.y
+                            };
+                        });
+                        
+                        addDebugLog(`🗺️ Path Progression route: ${pathPoints.length} points`);
+                        addDebugLog(`📏 Distance: ${(route.summary.totalDistance/1000).toFixed(1)} km`);
+                        
+                        // Draw path
+                        if (pathPolyline) {
+                            map.removeLayer(pathPolyline);
+                        }
+                        
+                        const pathLatLngs = pathPoints.map(p => [p.lat, p.lon]);
+                        pathPolyline = L.polyline(pathLatLngs, {
+                            color: '#2196F3',
+                            weight: 4,
+                            opacity: 0.8,
+                            className: 'path-line'
+                        }).addTo(map);
+                        
+                        // Send to backend
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            const routeData = { 
+                                path: pathPoints.map(p => ({ lat: p.lat, lon: p.lon })),
+                                coordinate_system: 'enhanced_utm_47n_path_progression',
+                                reference_point: { lat: REFERENCE_LAT, lon: REFERENCE_LON },
+                                progression_enabled: true
+                            };
+                            socket.send(JSON.stringify(routeData));
+                            updateInfo('📤 ส่งเส้นทางสำหรับ Path Progression', 'รอการประมวลผลด้วย Enhanced System...');
+                        }
+                    }
+                }).addTo(map);
+                
+            } catch (error) {
+                addDebugLog(`❌ Route calculation error: ${error.message}`);
+                updateInfo('เกิดข้อผิดพลาด', 'ไม่สามารถคำนวณเส้นทางได้');
+            }
+        }
+        
+        function showArrivalModal(data) {
+            const modal = document.getElementById('arrivalModal');
+            const message = document.getElementById('arrivalMessage');
+            
+            let statsText = 'การนำทางด้วย Path Progression Pure Pursuit algorithm สำเร็จเรียบร้อย!';
+            if (data.total_time && data.average_speed) {
+                statsText += `<br><br>📊 สถิติการเดินทาง:<br>`;
+                statsText += `⏱️ เวลารวม: ${data.total_time.toFixed(1)} วินาที<br>`;
+                statsText += `📏 ระยะทาง: ${(data.distance_traveled || 0).toFixed(1)} เมตร<br>`;
+                statsText += `🚗 ความเร็วเฉลี่ย: ${data.average_speed.toFixed(2)} m/s<br>`;
+                statsText += `🗺️ Algorithm: Path Progression Pure Pursuit<br>`;
+                if (data.completed_segments && data.total_segments) {
+                    statsText += `🎯 Segments: ${data.completed_segments}/${data.total_segments} completed<br>`;
+                }
+                statsText += `🔧 Coordinate: Enhanced UTM Zone 47N`;
+            }
+            
+            message.innerHTML = statsText;
+            modal.style.display = 'block';
+            document.getElementById('controls').style.display = 'none';
+            updateProgress(100);
+            navigationStartTime = 0;
+        }
+        
+        function closeModal() {
+            document.getElementById('arrivalModal').style.display = 'none';
+        }
+        
+        // 🔧 SMART REDIRECT: ค้นหา maptest.html อัตโนมัติ
+        function goHome() {
+            addDebugLog("🏠 Attempting smart redirect to maptest.html...");
+            
+            // รายการไฟล์ที่จะลองค้นหา (ตามลำดับความน่าจะเป็น)
+            const possibleFiles = [
+                'maptest.html',        // ไฟล์หลัก
+                './maptest.html',      // Same directory
+                '../maptest.html',     // Parent directory
+                '../../maptest.html',  // Grandparent directory
+                '/maptest.html',       // Root directory
+                'mapotest.html',       // ไฟล์เดิมที่อาจจะยังมี
+                './mapotest.html',
+                'index.html',          // Fallback
+                './index.html',
+                '../index.html'
+            ];
+            
+            let redirectAttempts = 0;
+            let redirectSuccess = false;
+            
+            function tryNextFile() {
+                if (redirectAttempts >= possibleFiles.length) {
+                    // ถ้าไม่เจอไฟล์ไหนเลย แสดง modal ให้เลือก
+                    showRedirectOptions();
+                    return;
+                }
+                
+                const currentFile = possibleFiles[redirectAttempts];
+                addDebugLog(`🔍 Trying redirect ${redirectAttempts + 1}/${possibleFiles.length}: ${currentFile}`);
+                
+                // สร้าง hidden iframe เพื่อทดสอบไฟล์
+                const testFrame = document.createElement('iframe');
+                testFrame.style.display = 'none';
+                testFrame.style.position = 'absolute';
+                testFrame.style.left = '-9999px';
+                testFrame.src = currentFile;
+                
+                let testCompleted = false;
+                
+                // ถ้าโหลดสำเร็จ
+                testFrame.onload = function() {
+                    if (!testCompleted && !redirectSuccess) {
+                        testCompleted = true;
+                        redirectSuccess = true;
+                        document.body.removeChild(testFrame);
+                        addDebugLog(`✅ Found maptest.html at: ${currentFile}`);
+                        window.location.href = currentFile;
+                    }
+                };
+                
+                // ถ้าโหลดไม่สำเร็จ
+                testFrame.onerror = function() {
+                    if (!testCompleted) {
+                        testCompleted = true;
+                        document.body.removeChild(testFrame);
+                        addDebugLog(`❌ ${currentFile} not found`);
+                        redirectAttempts++;
+                        setTimeout(tryNextFile, 200);
+                    }
+                };
+                
+                // Timeout protection
+                setTimeout(() => {
+                    if (!testCompleted) {
+                        testCompleted = true;
+                        try {
+                            document.body.removeChild(testFrame);
+                        } catch (e) {}
+                        addDebugLog(`⏰ ${currentFile} timeout`);
+                        redirectAttempts++;
+                        tryNextFile();
+                    }
+                }, 1500);
+                
+                document.body.appendChild(testFrame);
+            }
+            
+            // เริ่มลองหาไฟล์
+            tryNextFile();
+        }
+        
+        function showRedirectOptions() {
+            addDebugLog("📋 แสดงตัวเลือกการ redirect");
+            
+            // สร้าง modal ให้ user เลือกเอง
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 20000;
+                display: flex; align-items: center; justify-content: center;
+                backdrop-filter: blur(10px);
+            `;
+            
+            const content = document.createElement('div');
+            content.style.cssText = `
+                background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+                color: white; padding: 30px; border-radius: 15px; text-align: center;
+                box-shadow: 0 15px 40px rgba(0,0,0,0.5); max-width: 450px;
+                animation: modalSlideIn 0.5s ease-out;
+            `;
+            
+            content.innerHTML = `
+                <h3>🏠 กลับหน้าแรก</h3>
+                <p>ไม่พบไฟล์ maptest.html โปรดเลือกวิธีการกลับ:</p>
+                <div style="margin: 20px 0;">
+                    <button onclick="window.location.href='maptest.html'" 
+                            style="background: rgba(255,255,255,0.2); color: white; border: none; 
+                                   padding: 10px 20px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        📋 maptest.html
+                    </button>
+                    <button onclick="window.location.href='./maptest.html'" 
+                            style="background: rgba(255,255,255,0.2); color: white; border: none; 
+                                   padding: 10px 20px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        📁 ./maptest.html
+                    </button>
+                    <button onclick="window.location.href='../maptest.html'" 
+                            style="background: rgba(255,255,255,0.2); color: white; border: none; 
+                                   padding: 10px 20px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        📂 ../maptest.html
+                    </button>
+                    <br>
+                    <button onclick="window.location.href='mapotest.html'" 
+                            style="background: rgba(255,255,255,0.15); color: white; border: none; 
+                                   padding: 8px 16px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        📄 mapotest.html (เดิม)
+                    </button>
+                    <button onclick="window.location.href='index.html'" 
+                            style="background: rgba(255,255,255,0.15); color: white; border: none; 
+                                   padding: 8px 16px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        🏠 index.html
+                    </button>
+                    <button onclick="window.location.href='./'" 
+                            style="background: rgba(255,255,255,0.15); color: white; border: none; 
+                                   padding: 8px 16px; margin: 5px; border-radius: 20px; cursor: pointer; font-weight: 600;">
+                        📁 Directory หลัก
+                    </button>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" 
+                        style="background: rgba(255,255,255,0.1); color: white; border: none; 
+                               padding: 8px 16px; border-radius: 15px; cursor: pointer; font-weight: 600;">
+                    ❌ ปิด
+                </button>
+            `;
+            
+            modal.appendChild(content);
+            document.body.appendChild(modal);
+        }
+        
+        function showConnectionHelp() {
+            const helpDiv = document.createElement('div');
+            helpDiv.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+                color: white; padding: 25px; border-radius: 15px; z-index: 10000;
+                box-shadow: 0 15px 40px rgba(0,0,0,0.5); text-align: center;
+                backdrop-filter: blur(10px);
+            `;
+            helpDiv.innerHTML = `
+                <h3>🚫 ไม่สามารถเชื่อมต่อ Enhanced Path Progression Server ได้</h3>
+                <p>กรุณารัน Enhanced Python backend:</p>
+                <code style="background: rgba(0,0,0,0.3); padding: 8px; display: block; margin: 12px 0; border-radius: 4px; font-size: 12px;">
+                python3 road_aligned_navigation_fixed.py
+                </code>
+                <button onclick="this.parentElement.remove(); location.reload();" 
+                        style="background: rgba(255,255,255,0.2); color: white; 
+                               border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer;
+                               margin-top: 12px; font-weight: 600;">
+                    🔄 ลองใหม่
+                </button>
+            `;
+            document.body.appendChild(helpDiv);
+        }
+        
+        // Navigation controls
+        function startNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'start' }));
+                addDebugLog("🚀 START Smart Direct Steering navigation");
+                navigationStartTime = Date.now();
+            }
+        }
+        
+        function pauseNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'pause' }));
+                addDebugLog("⏸️ PAUSE Smart Direct Steering navigation");
+            }
+        }
+        
+        function stopNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'stop' }));
+                addDebugLog("🛑 STOP Smart Direct Steering navigation");
+                navigationStartTime = 0;
+            }
+        }
+        
+        // Debug functions
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            debugVisible = !debugVisible;
+            panel.style.display = debugVisible ? 'block' : 'none';
+            if (debugVisible) updateDebugPanel();
+        }
+        
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLogs.push(`[${timestamp}] ${message}`);
+            if (debugLogs.length > 30) debugLogs.shift();
+            if (debugVisible) updateDebugPanel();
+        }
+        
+        function updateDebugPanel() {
+            const content = document.getElementById('debugContent');
+            const status = socket ? (socket.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected') : 'Not initialized';
+            
+            let debugInfo = `
+                <div style="color: #00ff88;">🎯 SMART DIRECT STEERING DEBUG</div>
+                <div>Status: ${status}</div>
+                <div>Navigation: ${navigationActive ? 'Active' : 'Inactive'}</div>
+                <div>Algorithm: Smart Direct to Lookahead</div>
+                <div>Method: Enhanced Direct Angle Calc</div>
+                <div>Coordinate System: GPS Standard Enhanced</div>
+                <div>Reference: ${REFERENCE_LAT.toFixed(6)}, ${REFERENCE_LON.toFixed(6)}</div>
+                <div>Path Debug: ${pathDebugVisible ? 'ON' : 'OFF'}</div>
+                <div>Progression: ${progressionVisible ? 'ON' : 'OFF'}</div>
+                <div>Steering: Smart Direct Method</div>
+                <div>Redirect: Smart Auto-Detection</div>
+                <div>Last update: ${new Date().toLocaleTimeString()}</div>
+                <div style="margin-top: 8px; color: #ffeb3b;"><strong>Recent logs:</strong></div>
+            `;
+            
+            debugLogs.slice(-10).forEach(log => {
+                debugInfo += `<div style="font-size: 9px; opacity: 0.8;">${log}</div>`;
+            });
+            
+            content.innerHTML = debugInfo;
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            addDebugLog("🎯 Smart Direct Steering golf cart navigation starting...");
+            addDebugLog("🔧 FEATURES: Smart direct steering + Auto maptest.html detection");
+            addDebugLog("🎯 Method: Point directly to lookahead with smart redirect");
+            initMap();
+            setInterval(updateElapsedTime, 1000);
+        });
+    </script>
+</body>
+</html>

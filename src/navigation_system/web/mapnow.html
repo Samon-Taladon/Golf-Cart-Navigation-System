@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎯 Pure Pursuit Golf Cart Navigation</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        body, html { height: 100%; margin: 0; font-family: Arial, sans-serif; background: #1a1a1a; }
+        #map { width: 100%; height: 100%; }
+        
+        .info-panel {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white; padding: 20px; border-radius: 15px; 
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            text-align: center; min-width: 400px; backdrop-filter: blur(10px);
+        }
+        
+        .info-panel h3 {
+            margin: 0 0 15px 0; font-size: 20px; font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .status {
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            padding: 12px 18px; border-radius: 25px; font-weight: bold;
+            backdrop-filter: blur(10px); transition: all 0.3s ease;
+        }
+        .connected { 
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            color: white; box-shadow: 0 4px 15px rgba(76,175,80,0.4);
+        }
+        .disconnected { 
+            background: linear-gradient(135deg, #f44336, #d32f2f); 
+            color: white; box-shadow: 0 4px 15px rgba(244,67,54,0.4);
+        }
+        
+        .controls {
+            position: absolute; top: 80px; right: 10px; z-index: 1000;
+            background: rgba(255,255,255,0.95); padding: 15px; border-radius: 15px;
+            backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049); 
+            border: none; color: white; padding: 12px 20px;
+            margin: 3px; cursor: pointer; border-radius: 25px; font-size: 14px;
+            transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            font-weight: 600;
+        }
+        .btn:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+        .btn.stop { background: linear-gradient(135deg, #f44336, #d32f2f); }
+        .btn.pause { background: linear-gradient(135deg, #ff9800, #f57c00); }
+        
+        .progress {
+            width: 100%; height: 25px; background: rgba(255,255,255,0.2); 
+            border-radius: 15px; margin: 15px 0; overflow: hidden;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #00ff88, #00cc70);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1); 
+            border-radius: 15px; position: relative;
+            box-shadow: 0 0 20px rgba(0,255,136,0.5);
+        }
+        
+        .speed { 
+            font-size: 18px; font-weight: bold; margin: 10px 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .stats {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+            margin-top: 15px; font-size: 12px;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.1); padding: 8px;
+            border-radius: 8px; text-align: center;
+        }
+        
+        .vehicle-params {
+            position: absolute; bottom: 80px; left: 10px; z-index: 1000;
+            background: rgba(76,175,80,0.9); color: white; padding: 15px;
+            border-radius: 10px; font-family: 'Courier New', monospace; font-size: 12px;
+            backdrop-filter: blur(5px); border: 1px solid #4CAF50;
+        }
+        
+        .debug {
+            position: absolute; bottom: 10px; left: 10px; z-index: 1000;
+            background: rgba(0,0,0,0.9); color: #00ff88; padding: 15px;
+            border-radius: 10px; font-family: 'Courier New', monospace; font-size: 11px;
+            max-width: 400px; display: none; border: 1px solid #00ff88;
+            backdrop-filter: blur(5px);
+        }
+        
+        .debug-btn {
+            position: absolute; bottom: 10px; right: 10px; z-index: 1000;
+            background: rgba(0,0,0,0.8); color: #00ff88; border: 1px solid #00ff88;
+            padding: 8px 15px; border-radius: 5px; cursor: pointer;
+            font-family: monospace; transition: all 0.3s ease;
+        }
+        .debug-btn:hover {
+            background: rgba(0,255,136,0.1);
+            box-shadow: 0 0 10px rgba(0,255,136,0.3);
+        }
+        
+        .arrival-modal {
+            display: none; position: fixed; z-index: 10000; left: 0; top: 0;
+            width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            color: white; margin: 15% auto; padding: 40px; border-radius: 25px;
+            width: 450px; text-align: center; 
+            animation: modalSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        
+        @keyframes modalSlideIn {
+            from { transform: translateY(-100px) scale(0.8); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        
+        .modal-header { 
+            font-size: 32px; margin-bottom: 20px; 
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .modal-message { font-size: 18px; margin-bottom: 30px; line-height: 1.5; }
+        .modal-btn {
+            padding: 15px 30px; border: none; border-radius: 25px;
+            font-size: 16px; cursor: pointer; margin: 8px; font-weight: 600;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.2); color: white;
+        }
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(255,255,255,0.3);
+        }
+        
+        /* Pure Pursuit Specific Styles */
+        .lookahead-circle {
+            stroke: #FF5722;
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 5,5;
+            animation: dashMove 2s linear infinite;
+        }
+        
+        @keyframes dashMove {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 20; }
+        }
+        
+        .path-line {
+            stroke: #2196F3;
+            stroke-width: 4;
+            fill: none;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 8px rgba(33, 150, 243, 0.6));
+        }
+        
+        .robot-marker {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .lookahead-marker {
+            transition: all 0.2s ease-out;
+        }
+        
+        /* Hide Leaflet Routing Machine control panel */
+        .leaflet-routing-container {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="info-panel" id="infoPanel">
+        <h3>🎯 Pure Pursuit Golf Cart Navigation</h3>
+        <div id="destinationInfo">รอการเชื่อมต่อ...</div>
+        <div class="speed" id="speedDisplay">ความเร็ว: 0.0 m/s</div>
+        <div class="progress">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+        <div id="progressText">ความก้าวหน้า: 0%</div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <div>📏 ระยะทาง</div>
+                <div id="totalDistance">0.0 m</div>
+            </div>
+            <div class="stat-item">
+                <div>⏱️ เวลา</div>
+                <div id="elapsedTime">00:00</div>
+            </div>
+            <div class="stat-item">
+                <div>🎯 ถึงจุดหมาย</div>
+                <div id="distanceToDest">- m</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status disconnected" id="statusIndicator">Disconnected</div>
+    
+    <div class="controls" id="controls">
+        <button class="btn" onclick="startNav()">🚀 Start</button>
+        <button class="btn pause" onclick="pauseNav()">⏸️ Pause</button>
+        <button class="btn stop" onclick="stopNav()">🛑 Stop</button>
+    </div>
+    
+    <div class="vehicle-params">
+        <div><strong>🚗 Vehicle Parameters</strong></div>
+        <div>Wheelbase: 1.67m</div>
+        <div>Max Steering: ±50° (±0.873 rad)</div>
+        <div>Algorithm: Pure Pursuit</div>
+        <div>Lookahead: <span id="lookaheadDist">3.0m</span></div>
+    </div>
+    
+    <div class="arrival-modal" id="arrivalModal">
+        <div class="modal-content">
+            <div class="modal-header">🎉 ถึงจุดหมายแล้ว!</div>
+            <div class="modal-message" id="arrivalMessage">
+                การนำทางด้วย Pure Pursuit สำเร็จเรียบร้อย!
+            </div>
+            <button class="modal-btn" onclick="closeModal()">✨ ปิด</button>
+            <button class="modal-btn" onclick="goHome()">🏠 กลับหน้าแรก</button>
+        </div>
+    </div>
+    
+    <div class="debug" id="debugPanel">
+        <div><strong>🎯 Pure Pursuit Debug</strong></div>
+        <div id="debugContent">Initializing Pure Pursuit system...</div>
+    </div>
+    
+    <button class="debug-btn" onclick="toggleDebug()">🎯 Debug</button>
+    
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script>
+        let map, userMarker, destMarker, lookaheadMarker;
+        let socket = null;
+        let pathPolyline = null;
+        let lookaheadCircle = null;
+        let navigationActive = false;
+        let destination = null;
+        let debugVisible = false;
+        let debugLogs = [];
+        let navigationStartTime = 0;
+        let routingControl = null;
+        
+        // Available destinations
+        const destinations = {
+            "S14": { lat: 13.650940, lon: 100.492070, name: "King Mongkut's 190th Anniversary Building" },
+            "S13": { lat: 13.650076, lon: 100.492140, name: "Classroom Building 3" },
+            "S12": { lat: 13.649913, lon: 100.492690, name: "Classroom Building 4" },
+            "S11": { lat: 13.649992, lon: 100.493327, name: "Classroom Building 5" },
+            "S15": { lat: 13.650154, lon: 100.492984, name: "Department of Chemical Engineering Building" },
+            "N19": { lat: 13.651010, lon: 100.492980, name: "Production Engineering Laboratory Building 5" },
+            "N20": { lat: 13.6513894, lon: 100.4929824, name: "Classroom Building 1" }
+        };
+        
+        function initMap() {
+            addDebugLog("🎯 Initializing Pure Pursuit navigation system...");
+            
+            map = L.map('map', {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([13.6509, 100.4929], 18);
+            
+            // Dark theme map
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© CartoDB © OpenStreetMap',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+            
+            // Auto-set destination from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const destParam = urlParams.get('destination');
+            if (destParam) {
+                const buildingCode = destParam.split(' ')[0];
+                if (destinations[buildingCode]) {
+                    setTimeout(() => setDestination(buildingCode), 1000);
+                }
+            }
+            
+            connectWebSocket();
+        }
+        
+        async function connectWebSocket() {
+            const servers = ['localhost:5001', 'localhost:5000', '127.0.0.1:5001'];
+            addDebugLog("🔍 Searching for Pure Pursuit server...");
+            
+            for (let server of servers) {
+                try {
+                    addDebugLog(`Testing ${server}...`);
+                    socket = new WebSocket(`ws://${server}`);
+                    
+                    const connected = await new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            socket.close();
+                            resolve(false);
+                        }, 2000);
+                        
+                        socket.onopen = () => {
+                            clearTimeout(timeout);
+                            resolve(true);
+                        };
+                        
+                        socket.onerror = () => {
+                            clearTimeout(timeout);
+                            resolve(false);
+                        };
+                    });
+                    
+                    if (connected) {
+                        addDebugLog(`✅ Connected to Pure Pursuit server: ${server}`);
+                        setupSocketHandlers();
+                        updateStatus('connected', `Pure Pursuit Server (${server})`);
+                        return;
+                    }
+                } catch (e) {
+                    addDebugLog(`❌ ${server} failed`);
+                    continue;
+                }
+            }
+            
+            addDebugLog("❌ No Pure Pursuit servers found");
+            updateStatus('disconnected', 'No server found');
+            showConnectionHelp();
+        }
+        
+        function setupSocketHandlers() {
+            socket.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    processData(data);
+                } catch (e) {
+                    addDebugLog(`Message error: ${e.message}`);
+                }
+            };
+            
+            socket.onclose = function() {
+                addDebugLog("Connection closed");
+                updateStatus('disconnected', 'Disconnected');
+                setTimeout(connectWebSocket, 3000);
+            };
+            
+            socket.onerror = function(error) {
+                addDebugLog(`Socket error: ${error.message || 'Unknown'}`);
+            };
+        }
+        
+        function processData(data) {
+            if (data.latitude && data.longitude) {
+                updateUserPosition(data.latitude, data.longitude, data.current_heading || 0);
+                
+                navigationActive = data.navigation_active || false;
+                
+                // Update UI
+                if (data.current_speed !== undefined) {
+                    updateSpeed(data.current_speed);
+                }
+                
+                if (data.route_progress !== undefined) {
+                    updateProgress(data.route_progress);
+                }
+                
+                if (data.distance_to_destination !== undefined) {
+                    updateDistanceToDest(data.distance_to_destination);
+                }
+                
+                if (data.distance_traveled !== undefined) {
+                    updateTotalDistance(data.distance_traveled);
+                }
+                
+                // Update lookahead marker and circle
+                if (data.lookahead_lat && data.lookahead_lon) {
+                    updateLookaheadVisualization(data.lookahead_lat, data.lookahead_lon, data.lookahead_distance || 3.0);
+                }
+                
+                updateElapsedTime();
+            }
+            
+            if (data.route_received) {
+                addDebugLog(`🎯 Pure Pursuit route: ${data.smooth_points} points`);
+                document.getElementById('controls').style.display = 'block';
+                updateInfo('🎯 Pure Pursuit Path พร้อม', `${data.smooth_points} จุด, Wheelbase: ${data.wheelbase}m`);
+                
+                // Update vehicle parameters display
+                if (data.wheelbase) {
+                    document.querySelector('.vehicle-params').innerHTML = `
+                        <div><strong>🚗 Vehicle Parameters</strong></div>
+                        <div>Wheelbase: ${data.wheelbase}m</div>
+                        <div>Max Steering: ±${data.max_steering || 50}°</div>
+                        <div>Algorithm: Pure Pursuit</div>
+                        <div>Lookahead: <span id="lookaheadDist">3.0m</span></div>
+                    `;
+                }
+            }
+            
+            if (data.navigation_started) {
+                addDebugLog("🚀 Pure Pursuit navigation started");
+                navigationStartTime = Date.now();
+                updateInfo('🎯 Pure Pursuit Active', 'กำลังติดตาม lookahead point');
+            }
+            
+            if (data.arrived) {
+                addDebugLog("🎉 Arrived via Pure Pursuit");
+                showArrivalModal(data);
+            }
+        }
+        
+        function updateUserPosition(lat, lon, heading = 0) {
+            // Create robot icon with heading indicator
+            const robotIcon = L.divIcon({
+                className: 'robot-marker',
+                html: `<div style="width: 30px; height: 30px; position: relative;">
+                         <!-- Main body -->
+                         <div style="width: 24px; height: 24px; background: linear-gradient(135deg, #4CAF50, #2E7D32); 
+                                    border: 3px solid white; border-radius: 50%; 
+                                    box-shadow: 0 4px 12px rgba(76,175,80,0.5);
+                                    position: absolute; top: 3px; left: 3px;">
+                         </div>
+                         <!-- Direction indicator -->
+                         <div style="position: absolute; top: 0; left: 15px;
+                                    width: 0; height: 0;
+                                    border-left: 4px solid transparent;
+                                    border-right: 4px solid transparent;
+                                    border-bottom: 8px solid #FF5722;
+                                    transform: rotate(${heading}deg);
+                                    transform-origin: center 20px;">
+                         </div>
+                       </div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            
+            if (userMarker) {
+                userMarker.setLatLng([lat, lon]);
+                userMarker.setIcon(robotIcon);
+            } else {
+                userMarker = L.marker([lat, lon], { icon: robotIcon })
+                    .addTo(map)
+                    .bindPopup("🤖 Golf Cart (Pure Pursuit)");
+                map.setView([lat, lon], 18);
+            }
+        }
+        
+        function updateLookaheadVisualization(lat, lon, lookaheadDist) {
+            // Update lookahead distance display
+            document.getElementById('lookaheadDist').textContent = `${lookaheadDist.toFixed(1)}m`;
+            
+            // Lookahead point marker
+            const lookaheadIcon = L.divIcon({
+                className: 'lookahead-marker',
+                html: `<div style="width: 20px; height: 20px; background: linear-gradient(135deg, #FF5722, #D84315); 
+                              border: 2px solid white; border-radius: 50%; 
+                              box-shadow: 0 0 15px rgba(255,87,34,0.8);
+                              animation: lookaheadPulse 2s ease-in-out infinite;">
+                       </div>
+                       <style>
+                         @keyframes lookaheadPulse { 
+                           0%, 100% { transform: scale(1); } 
+                           50% { transform: scale(1.3); } 
+                         }
+                       </style>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            if (lookaheadMarker) {
+                lookaheadMarker.setLatLng([lat, lon]);
+            } else {
+                lookaheadMarker = L.marker([lat, lon], { icon: lookaheadIcon })
+                    .addTo(map)
+                    .bindPopup("🎯 Lookahead Point");
+            }
+            
+            // Draw lookahead circle around robot
+            if (userMarker && lookaheadDist) {
+                if (lookaheadCircle) {
+                    map.removeLayer(lookaheadCircle);
+                }
+                
+                lookaheadCircle = L.circle(userMarker.getLatLng(), {
+                    radius: lookaheadDist,
+                    className: 'lookahead-circle',
+                    weight: 2,
+                    color: '#FF5722',
+                    fillOpacity: 0
+                }).addTo(map);
+            }
+        }
+        
+        function updateSpeed(speed) {
+            const speedEl = document.getElementById('speedDisplay');
+            speedEl.textContent = `ความเร็ว: ${speed.toFixed(1)} m/s`;
+            
+            if (speed > 1.0) {
+                speedEl.style.color = '#00ff88';
+            } else if (speed > 0.3) {
+                speedEl.style.color = '#ffeb3b';
+            } else {
+                speedEl.style.color = '#ff5722';
+            }
+        }
+        
+        function updateProgress(progress) {
+            const fill = document.getElementById('progressFill');
+            const text = document.getElementById('progressText');
+            const clampedProgress = Math.max(0, Math.min(100, progress));
+            
+            fill.style.width = `${clampedProgress}%`;
+            text.textContent = `ความก้าวหน้า: ${Math.round(clampedProgress)}%`;
+        }
+        
+        function updateDistanceToDest(distance) {
+            const distEl = document.getElementById('distanceToDest');
+            if (distance !== null && distance !== undefined) {
+                distEl.textContent = `${distance.toFixed(1)} m`;
+            } else {
+                distEl.textContent = '- m';
+            }
+        }
+        
+        function updateTotalDistance(distance) {
+            const distEl = document.getElementById('totalDistance');
+            if (distance !== null && distance !== undefined) {
+                if (distance >= 1000) {
+                    distEl.textContent = `${(distance/1000).toFixed(2)} km`;
+                } else {
+                    distEl.textContent = `${distance.toFixed(0)} m`;
+                }
+            }
+        }
+        
+        function updateElapsedTime() {
+            if (navigationStartTime === 0 || !navigationActive) return;
+            
+            const elapsed = (Date.now() - navigationStartTime) / 1000;
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = Math.floor(elapsed % 60);
+            
+            document.getElementById('elapsedTime').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        function updateInfo(title, subtitle = '') {
+            const panel = document.getElementById('destinationInfo');
+            panel.innerHTML = subtitle ? `${title}<br><small style="opacity: 0.8;">${subtitle}</small>` : title;
+        }
+        
+        function updateStatus(status, message) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.textContent = message;
+            indicator.className = `status ${status}`;
+        }
+        
+        async function setDestination(destCode) {
+            const selectedDest = destinations[destCode];
+            if (!selectedDest) return;
+            
+            destination = selectedDest;
+            updateInfo(`🎯 จุดหมาย: ${destCode}`, selectedDest.name);
+            
+            const destIcon = L.divIcon({
+                className: 'dest-marker',
+                html: `<div style="width: 32px; height: 32px; background: linear-gradient(135deg, #f44336, #d32f2f); 
+                              border: 3px solid white; border-radius: 50%; 
+                              box-shadow: 0 4px 15px rgba(244,67,54,0.6);
+                              display: flex; align-items: center; justify-content: center;
+                              color: white; font-weight: bold; font-size: 16px;">
+                         🎯
+                       </div>`,
+                iconSize: [38, 38],
+                iconAnchor: [19, 19]
+            });
+            
+            if (destMarker) {
+                destMarker.setLatLng([selectedDest.lat, selectedDest.lon]);
+            } else {
+                destMarker = L.marker([selectedDest.lat, selectedDest.lon], { icon: destIcon })
+                    .addTo(map)
+                    .bindPopup(`🎯 ${destCode} - ${selectedDest.name}`);
+            }
+            
+            // Wait for user position, then calculate route
+            if (userMarker) {
+                await calculateRouteWithLeaflet(userMarker.getLatLng(), selectedDest);
+            } else {
+                addDebugLog("⏳ Waiting for robot position...");
+            }
+        }
+        
+        async function calculateRouteWithLeaflet(start, end) {
+            try {
+                updateInfo('🎯 กำลังสร้าง Pure Pursuit route...', '');
+                
+                if (routingControl) {
+                    map.removeControl(routingControl);
+                }
+                
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(start.lat, start.lng),
+                        L.latLng(end.lat, end.lon)
+                    ],
+                    routeWhileDragging: false,
+                    addWaypoints: false,
+                    createMarker: function() { return null; },
+                    lineOptions: {
+                        styles: [{ color: 'transparent', weight: 0 }]
+                    },
+                    show: false
+                }).on('routesfound', function(e) {
+                    const routes = e.routes;
+                    if (routes && routes.length > 0) {
+                        const route = routes[0];
+                        const coordinates = route.coordinates;
+                        
+                        // Convert to path format
+                        const pathPoints = coordinates.map(coord => ({
+                            lat: coord.lat, 
+                            lon: coord.lng
+                        }));
+                        
+                        addDebugLog(`🎯 Pure Pursuit route: ${pathPoints.length} points`);
+                        addDebugLog(`📏 Distance: ${(route.summary.totalDistance/1000).toFixed(1)} km`);
+                        
+                        // Draw path
+                        if (pathPolyline) {
+                            map.removeLayer(pathPolyline);
+                        }
+                        
+                        const pathLatLngs = pathPoints.map(p => [p.lat, p.lon]);
+                        pathPolyline = L.polyline(pathLatLngs, {
+                            color: '#2196F3',
+                            weight: 4,
+                            opacity: 0.8,
+                            className: 'path-line'
+                        }).addTo(map);
+                        
+                        // Send to backend
+                        if (socket && socket.readyState === WebSocket.OPEN) {
+                            const routeData = { path: pathPoints };
+                            socket.send(JSON.stringify(routeData));
+                            updateInfo('📤 ส่งเส้นทางสำหรับ Pure Pursuit', 'รอการประมวลผล...');
+                        }
+                    }
+                }).addTo(map);
+                
+            } catch (error) {
+                addDebugLog(`❌ Route calculation error: ${error.message}`);
+                updateInfo('เกิดข้อผิดพลาด', 'ไม่สามารถคำนวณเส้นทางได้');
+            }
+        }
+        
+        function showArrivalModal(data) {
+            const modal = document.getElementById('arrivalModal');
+            const message = document.getElementById('arrivalMessage');
+            
+            let statsText = 'การนำทางด้วย Pure Pursuit algorithm สำเร็จเรียบร้อย!';
+            if (data.total_time && data.average_speed) {
+                statsText += `<br><br>📊 สถิติการเดินทาง:<br>`;
+                statsText += `⏱️ เวลารวม: ${data.total_time.toFixed(1)} วินาที<br>`;
+                statsText += `📏 ระยะทาง: ${(data.distance_traveled || 0).toFixed(1)} เมตร<br>`;
+                statsText += `🚗 ความเร็วเฉลี่ย: ${data.average_speed.toFixed(2)} m/s<br>`;
+                statsText += `🎯 Algorithm: Pure Pursuit`;
+            }
+            
+            message.innerHTML = statsText;
+            modal.style.display = 'block';
+            document.getElementById('controls').style.display = 'none';
+            updateProgress(100);
+            navigationStartTime = 0;
+        }
+        
+        function closeModal() {
+            document.getElementById('arrivalModal').style.display = 'none';
+        }
+        
+        function goHome() {
+            window.location.href = 'index.html';
+        }
+        
+        function showConnectionHelp() {
+            const helpDiv = document.createElement('div');
+            helpDiv.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+                color: white; padding: 30px; border-radius: 20px; z-index: 10000;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center;
+                backdrop-filter: blur(10px);
+            `;
+            helpDiv.innerHTML = `
+                <h3>🚫 ไม่สามารถเชื่อมต่อ Pure Pursuit Server ได้</h3>
+                <p>กรุณารัน Pure Pursuit Python backend:</p>
+                <code style="background: rgba(0,0,0,0.3); padding: 10px; display: block; margin: 15px 0; border-radius: 5px;">
+                python3 pure_pursuit_golf_cart.py
+                </code>
+                <p style="font-size: 14px; opacity: 0.8;">พร้อมกับ GNSS module</p>
+                <button onclick="this.parentElement.remove(); location.reload();" 
+                        style="background: rgba(255,255,255,0.2); color: white; 
+                               border: none; padding: 12px 25px; border-radius: 25px; cursor: pointer;
+                               margin-top: 15px; font-weight: 600;">
+                    🔄 ลองใหม่
+                </button>
+            `;
+            document.body.appendChild(helpDiv);
+        }
+        
+        // Navigation controls
+        function startNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'start' }));
+                addDebugLog("🚀 START Pure Pursuit navigation");
+                navigationStartTime = Date.now();
+            }
+        }
+        
+        function pauseNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'pause' }));
+                addDebugLog("⏸️ PAUSE Pure Pursuit navigation");
+            }
+        }
+        
+        function stopNav() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ navigation_command: 'stop' }));
+                addDebugLog("🛑 STOP Pure Pursuit navigation");
+                navigationStartTime = 0;
+            }
+        }
+        
+        // Debug functions
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            debugVisible = !debugVisible;
+            panel.style.display = debugVisible ? 'block' : 'none';
+            if (debugVisible) updateDebugPanel();
+        }
+        
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLogs.push(`[${timestamp}] ${message}`);
+            if (debugLogs.length > 25) debugLogs.shift();
+            if (debugVisible) updateDebugPanel();
+        }
+        
+        function updateDebugPanel() {
+            const content = document.getElementById('debugContent');
+            const status = socket ? (socket.readyState === WebSocket.OPEN ? 'Connected' : 'Disconnected') : 'Not initialized';
+            
+            let debugInfo = `
+                <div style="color: #00ff88;">🎯 PURE PURSUIT NAVIGATION DEBUG</div>
+                <div>Status: ${status}</div>
+                <div>Navigation: ${navigationActive ? 'Active' : 'Inactive'}</div>
+                <div>Algorithm: Pure Pursuit</div>
+                <div>Wheelbase: 1.67m</div>
+                <div>Max Steering: ±50° (±0.873 rad)</div>
+                <div>Last update: ${new Date().toLocaleTimeString()}</div>
+                <div style="margin-top: 10px; color: #ffeb3b;"><strong>Recent logs:</strong></div>
+            `;
+            
+            debugLogs.slice(-8).forEach(log => {
+                debugInfo += `<div style="font-size: 10px; opacity: 0.8;">${log}</div>`;
+            });
+            
+            content.innerHTML = debugInfo;
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            addDebugLog("🎯 Pure Pursuit golf cart navigation starting...");
+            initMap();
+            setInterval(updateElapsedTime, 1000);
+        });
+    </script>
+</body>
+</html>

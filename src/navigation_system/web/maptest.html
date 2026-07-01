@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: url('104439109_10157371513388581_3048654716169080871_n.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+        .map-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .map-container img {
+            object-fit: contain;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .marker {
+            position: absolute;
+            color: rgb(231, 231, 231);
+            font-weight: bold;
+            font-size: 30px;
+            cursor: pointer;
+            padding: 3px 3px;
+            border-radius: 5px;
+            transition: background 0.3s;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .marker:hover {
+            background: rgb(117, 113, 113);
+        }
+        
+        .popup {
+            display: none;
+            position: absolute;
+            background: white;
+            padding: 10px;
+            border: 1px solid black;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="map-container">
+        <img src="Untitled_design-Photoroom.png" alt="Campus Map">
+        
+        <!-- ตำแหน่งของตัวอักษร S และ N -->
+        <div class="marker" style="top: 17.25%; left: 44.112%;" data-location="S14 King Mongkut's 190th Anniversary Memorial Building" data-code="S14">S14</div>
+        <div class="marker" style="top: 19.5%; left: 36.9%;" data-location="S13 Classroom Building 3" data-code="S13">S13</div>
+        <div class="marker" style="top: 31.25%; left: 34.45%;" data-location="S12 Classroom Building 4" data-code="S12">S12</div>
+        <div class="marker" style="top: 40.5%; left: 39.75%;" data-location="S15 Department of Chemical Engineering Building" data-code="S15">S15</div>
+        <div class="marker" style="top: 41.45%; left: 45.66%;" data-location="N19 Production Engineering Laboratory Building 5" data-code="N19">N19</div>
+        <div class="marker" style="top: 38.5%; left: 48.5%;" data-location="N20 Classroom Building 1" data-code="N20">N20</div>
+        <div class="marker" style="top: 41.5%; left: 35%;" data-location="S11 Classroom Building 5" data-code="S11">S11</div>
+        
+        <!-- Popup -->
+        <div id="popup" class="popup"></div>
+    </div>
+    
+    <!-- Audio element -->
+    <audio id="startSound" src="newhello.mp3"></audio>
+    
+    <script>
+        // Building data with coordinates
+        const buildingData = {
+            "S14": { lat: 13.650940, lon: 100.492070, name: "King Mongkut's 190th Anniversary Memorial Building" },
+            "S13": { lat: 13.650076, lon: 100.492140, name: "Classroom Building 3" },
+            "S12": { lat: 13.649913, lon: 100.492690, name: "Classroom Building 4" },
+            "S15": { lat: 13.650154, lon: 100.492984, name: "Department of Chemical Engineering Building" },
+            "N19": { lat: 13.651010, lon: 100.492980, name: "Production Engineering Laboratory Building 5" },
+            "N20": { lat: 13.6513894, lon: 100.4929824, name: "Classroom Building 1" },
+            "S11": { lat: 13.649992, lon: 100.493327, name: "Classroom Building 5" }
+        };
+
+        // Play sound automatically when the page loads
+        window.addEventListener('load', function() {
+            // Check if this is the first time loading the page in this session
+            if (!sessionStorage.getItem('soundPlayed')) {
+                const sound = document.getElementById("startSound");
+                
+                // Most browsers require user interaction before playing audio
+                // This is a workaround attempt, but may not work in all browsers
+                sound.volume = 1.0;
+                sound.play().catch(function(error) {
+                    console.log("Auto-play prevented. This is normal browser behavior to protect users.");
+                    // We could show a message to the user to click anywhere to play sound
+                });
+                
+                // Remember that we've played the sound
+                sessionStorage.setItem('soundPlayed', 'true');
+            }
+        });
+        
+        // Add a click event listener to the document to play sound on first interaction
+        document.addEventListener('click', function playOnFirstClick() {
+            const sound = document.getElementById("startSound");
+            if (!sound.played.length) {
+                sound.play();
+            }
+            // Remove this listener after first click
+            document.removeEventListener('click', playOnFirstClick);
+        }, { once: true });
+        
+        document.querySelectorAll(".marker").forEach(marker => {
+            marker.addEventListener("mouseover", function(event) {
+                let popup = document.getElementById("popup");
+                popup.style.display = "block";
+                popup.style.top = (event.pageY + 10) + "px";
+                popup.style.left = (event.pageX + 10) + "px";
+                popup.innerHTML = this.dataset.location;
+            });
+            
+            marker.addEventListener("mouseout", function() {
+                document.getElementById("popup").style.display = "none";
+            });
+            
+            marker.addEventListener("click", function() {
+                // Get building code from data-code attribute
+                const buildingCode = this.dataset.code;
+                const buildingInfo = buildingData[buildingCode];
+                
+                if (buildingInfo) {
+                    // Store destination data in sessionStorage
+                    const destinationData = {
+                        code: buildingCode,
+                        name: buildingInfo.name,
+                        lat: buildingInfo.lat,
+                        lon: buildingInfo.lon
+                    };
+                    
+                    sessionStorage.setItem('selectedDestination', JSON.stringify(destinationData));
+                    
+                    // Navigate to navigation page
+                    window.location.href = `map.html?destination=${encodeURIComponent(buildingCode)}`;
+                    // window.location.href = `mapcontrol.html?destination=${encodeURIComponent(buildingCode)}`;
+                } else {
+                    // Fallback to original behavior
+                    let destination = this.dataset.location;
+                    window.location.href = `map.html?destination=${encodeURIComponent(destination)}`;
+                    // window.location.href = `mapcontrol.html?destination=${encodeURIComponent(destination)}`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

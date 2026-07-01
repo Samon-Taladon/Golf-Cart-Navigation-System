@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สวนสัตว์นครราชสีมา</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,
+body{
+    width:100%;
+    height:100%;
+    background:url("zoo-cover.jpg") center center/cover no-repeat fixed;
+}
+
+body{
+    overflow:hidden;
+    font-family:'Mali',cursive;
+}
+
+.cover{
+    position:fixed;
+    top:0;
+    right:0;
+    bottom:0;
+    left:0;
+    width:100%;
+    height:100vh;
+    height:100dvh;
+    min-height:100vh;
+    min-height:100dvh;
+    overflow:hidden;
+}
+
+.cover::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    background:url("zoo-cover.jpg") center center/cover no-repeat;
+    z-index:0;
+}
+
+/* ================= SIGN ================= */
+
+.hero-sign{
+    position:absolute;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    width:500px;
+    height:190px;
+    z-index:15;
+}
+
+.ropes{
+    position:absolute;
+    top:0;
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    padding:0 55px;
+    pointer-events:none;
+    z-index:1;
+}
+
+.rope-line{
+    width:3px;
+    height:44px;
+    background:repeating-linear-gradient(
+        to bottom,
+        #c8a46e,
+        #a07840 6px,
+        #c8a46e 12px
+    );
+    border-radius:2px;
+}
+
+.posts{
+    position:absolute;
+    bottom:0;
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    padding:0 55px;
+    pointer-events:none;
+    z-index:2;
+}
+
+.post{
+    width:16px;
+    height:50px;
+    background:linear-gradient(to right,#6d3a1f,#a0522d,#8b4513,#5c2a0e);
+    border-radius:3px 3px 0 0;
+}
+
+.monkey{
+    position:absolute;
+    top:-5px;
+    left:30px;
+    font-size:80px;
+    z-index:10;
+    animation:peekMonkey 4s ease-in-out infinite;
+}
+
+.elephant{
+    position:absolute;
+    top:-5px;
+    right:25px;
+    font-size:90px;
+    z-index:10;
+    animation:peekElephant 4s ease-in-out infinite 2s;
+}
+
+.wood-sign{
+    position:absolute;
+    width:100%;
+    top:44px;
+    background:linear-gradient(145deg,#3a1005,#1e0802,#3a1005);
+    border-radius:18px;
+    padding:6px;
+    z-index:5;
+}
+
+.wood-inner{
+    background:linear-gradient(
+        160deg,
+        #c47a3d 0%,
+        #a0552a 18%,
+        #b86a2d 35%,
+        #9a4f22 52%,
+        #b06030 68%,
+        #c47a3d 82%,
+        #9a4f22 100%
+    );
+    border-radius:13px;
+    padding:14px 28px 15px;
+    position:relative;
+    overflow:hidden;
+}
+
+.wood-inner::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:13px;
+    background:
+        repeating-linear-gradient(
+            174deg,
+            transparent,
+            transparent 9px,
+            rgba(0,0,0,0.045) 9px,
+            rgba(0,0,0,0.045) 10px
+        ),
+        repeating-linear-gradient(
+            6deg,
+            transparent,
+            transparent 22px,
+            rgba(255,255,255,0.025) 22px,
+            rgba(255,255,255,0.025) 23px
+        );
+}
+
+.rope-holes{
+    position:absolute;
+    top:0;
+    width:100%;
+    left:0;
+    display:flex;
+    justify-content:space-between;
+    padding:0 28px;
+    pointer-events:none;
+    z-index:10;
+}
+
+.hole{
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:#1e0802;
+    margin-top:8px;
+}
+
+.screw{
+    position:absolute;
+    width:11px;
+    height:11px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 35%,#d0a060,#7a4010);
+    z-index:8;
+}
+
+.screw.tl{top:10px;left:10px;}
+.screw.tr{top:10px;right:10px;}
+.screw.bl{bottom:10px;left:10px;}
+.screw.br{bottom:10px;right:10px;}
+
+.sparkle{
+    position:absolute;
+    font-size:16px;
+    animation:twinkle 2.2s ease-in-out infinite;
+    pointer-events:none;
+    z-index:9;
+}
+
+.sign-content{
+    position:relative;
+    z-index:5;
+    text-align:center;
+}
+
+.title-top{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:18px;
+    margin-bottom:2px;
+}
+
+.side-logo{
+    width:90px;
+    height:90px;
+
+    object-fit:contain;
+
+    background:#f7d19e;
+
+    padding:4px;
+
+    border-radius:10px;
+
+
+    box-shadow:none;
+
+    filter:none;
+}
+
+.divider{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    justify-content:center;
+    margin:3px 0;
+}
+
+.divider-line{
+    flex:1;
+    height:1.5px;
+    background:linear-gradient(to right,transparent,rgba(255,200,80,0.55),transparent);
+}
+
+.divider-diamond{
+    width:7px;
+    height:7px;
+    background:#ffb300;
+    transform:rotate(45deg);
+}
+
+.wood-sign h1{
+    font-size:46px;
+    font-weight:700;
+    color:#ffe566;
+    -webkit-text-stroke:1px #c8860a;
+    text-shadow:3px 3px 0 #5d2f14;
+    letter-spacing:2px;
+    line-height:1.1;
+}
+
+.wood-sign h2{
+    font-size:32px;
+    font-weight:700;
+    color:#90ee50;
+    -webkit-text-stroke:1px #1a5200;
+    text-shadow:2px 2px 0 #1a4a00;
+    letter-spacing:1px;
+}
+
+/* ================= BUTTON ================= */
+
+.pin-group{
+    position:absolute;
+    right:280px;
+    top:88px;
+    z-index:30;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:14px;
+}
+
+.wood-btn{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    background:
+        linear-gradient(90deg,rgba(255,255,255,0.16),transparent 28%,rgba(0,0,0,0.08) 70%),
+        repeating-linear-gradient(7deg,transparent,transparent 10px,rgba(75,35,12,0.18) 11px,transparent 18px),
+        linear-gradient(to bottom,#cf8541,#8b4a1f);
+    color:#fff7d6;
+    border:5px solid #5c2f12;
+    border-radius:50% 50% 50% 12px;
+
+    width:48px;
+    height:48px;
+    padding:0;
+    font-size:22px;
+    font-weight:700;
+    font-family:'Mali',cursive;
+    text-shadow:2px 2px 0 rgba(67,30,9,0.85);
+    box-shadow:
+        inset 0 3px 0 rgba(255,221,152,0.45),
+        inset 0 -5px 0 rgba(75,35,12,0.38),
+        0 8px 0 #4a260f,
+        0 14px 24px rgba(0,0,0,0.32);
+
+    cursor:pointer;
+    transform:rotate(-45deg);
+    transition:transform 0.18s ease,filter 0.18s ease;
+}
+
+.wood-btn .pin-icon{
+    display:block;
+    transform:rotate(45deg);
+    line-height:1;
+}
+
+.wood-btn::after{
+    content:attr(data-destination);
+    position:absolute;
+    left:50%;
+    top:calc(100% + 14px);
+    min-width:190px;
+    padding:9px 13px;
+    border:3px solid #5c2f12;
+    border-radius:10px;
+    background:#fff2bd;
+    color:#5c2f12;
+    font-size:15px;
+    font-weight:700;
+    text-shadow:none;
+    box-shadow:0 8px 18px rgba(0,0,0,0.25);
+    opacity:0;
+    pointer-events:none;
+    transform:translateX(-50%) rotate(45deg) translateY(6px);
+    transition:opacity 0.16s ease,transform 0.16s ease;
+}
+
+.wood-btn::before{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:calc(100% + 5px);
+    width:14px;
+    height:14px;
+    background:#fff2bd;
+    border-right:3px solid #5c2f12;
+    border-bottom:3px solid #5c2f12;
+    opacity:0;
+    pointer-events:none;
+    transform:translateX(-50%) rotate(45deg);
+    transition:opacity 0.16s ease;
+}
+
+.wood-btn:hover::after{
+    opacity:1;
+    transform:translateX(-50%) rotate(45deg) translateY(0);
+}
+
+.wood-btn:hover::before{
+    opacity:1;
+}
+
+.wood-btn:hover{
+    transform:translateY(-3px) rotate(-45deg) scale(1.03);
+    filter:brightness(1.08);
+}
+
+.wood-btn:active{
+    transform:translateY(5px) rotate(-45deg) scale(0.99);
+    box-shadow:
+        inset 0 3px 0 rgba(255,221,152,0.4),
+        inset 0 -3px 0 rgba(75,35,12,0.34),
+        0 3px 0 #4a260f,
+        0 8px 16px rgba(0,0,0,0.28);
+}
+
+.wood-btn.is-active{
+    filter:brightness(1.12);
+}
+
+.rhino-pin{
+    left:-150px;
+}
+
+.lion-pin{
+    top:-96px;
+    right:-150px;
+}
+
+.deer-pin{
+    top:150px;
+    right:-150px;
+}
+
+.hippo-pin{
+    top:90px;
+    right:-40px;
+}
+
+.route-popup{
+    position:absolute;
+    left:50%;
+    bottom:45px;
+    z-index:35;
+    min-width:260px;
+    padding:16px 30px;
+    border:5px solid #5c2f12;
+    border-radius:14px;
+    background:
+        repeating-linear-gradient(8deg,transparent,transparent 9px,rgba(83,39,13,0.16) 10px,transparent 17px),
+        linear-gradient(155deg,#f4bd6f,#c77735 45%,#965222);
+    color:#fff7d6;
+    font-size:24px;
+    font-weight:700;
+    text-align:center;
+    text-shadow:2px 2px 0 rgba(67,30,9,0.85);
+    box-shadow:0 16px 28px rgba(0,0,0,0.34);
+    opacity:0;
+    transform:translateX(-50%) scale(1);
+    pointer-events:none;
+    transition:opacity 0.18s ease;
+}
+
+.route-popup.show{
+    opacity:1;
+    transform:translateX(-50%) scale(1);
+    pointer-events:auto;
+}
+
+.route-popup::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:-18px;
+    width:26px;
+    height:26px;
+    background:#965222;
+    border-right:5px solid #5c2f12;
+    border-bottom:5px solid #5c2f12;
+    transform:translateX(-50%) rotate(45deg);
+}
+
+/* ================= LOADING SCREEN ================= */
+
+.loading-screen{
+    position:absolute;
+    inset:0;
+    z-index:60;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    background:rgba(38,72,28,0.34);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.28s ease;
+}
+
+.loading-screen.show{
+    opacity:1;
+    pointer-events:auto;
+}
+
+.loading-panel{
+    width:min(520px,92vw);
+    padding:28px 30px 26px;
+    border:6px solid #5c2f12;
+    border-radius:18px;
+    background:
+        repeating-linear-gradient(8deg,transparent,transparent 12px,rgba(88,42,14,0.16) 13px,transparent 21px),
+        linear-gradient(155deg,#f6c977,#c77735 52%,#965222);
+    color:#fff7d6;
+    text-align:center;
+    box-shadow:
+        inset 0 4px 0 rgba(255,231,172,0.35),
+        inset 0 -7px 0 rgba(77,36,12,0.24),
+        0 18px 34px rgba(0,0,0,0.38);
+}
+
+.loading-panel h3{
+    font-size:34px;
+    line-height:1.15;
+    text-shadow:3px 3px 0 rgba(67,30,9,0.85);
+    margin-bottom:8px;
+}
+
+.loading-panel p{
+    font-size:18px;
+    line-height:1.55;
+    text-shadow:2px 2px 0 rgba(67,30,9,0.55);
+}
+
+.route-name{
+    display:inline-block;
+    margin:16px 0 18px;
+    padding:10px 16px;
+    border:3px solid #5c2f12;
+    border-radius:12px;
+    background:#fff2bd;
+    color:#5c2f12;
+    font-size:20px;
+    font-weight:700;
+    text-shadow:none;
+}
+
+.paw-loader{
+    display:flex;
+    justify-content:center;
+    gap:18px;
+    margin:8px 0 18px;
+    color:#3d1d0a;
+    font-size:28px;
+}
+
+.paw-loader span{
+    animation:pawStep 1.2s ease-in-out infinite;
+}
+
+.paw-loader span:nth-child(2){animation-delay:0.15s;}
+.paw-loader span:nth-child(3){animation-delay:0.3s;}
+.paw-loader span:nth-child(4){animation-delay:0.45s;}
+.paw-loader span:nth-child(5){animation-delay:0.6s;}
+
+.progress-track{
+    width:100%;
+    height:16px;
+    margin:0 auto 18px;
+    overflow:hidden;
+    border:3px solid #5c2f12;
+    border-radius:999px;
+    background:#fff2bd;
+}
+
+.progress-fill{
+    width:45%;
+    height:100%;
+    border-radius:999px;
+    background:linear-gradient(90deg,#90ee50,#ffe566,#ffb300);
+    animation:loadingMove 1.6s ease-in-out infinite;
+}
+
+.safety-note{
+    margin-top:4px;
+    color:#fffbe8;
+}
+
+.back-home{
+    margin-top:20px;
+    padding:10px 22px;
+    border:4px solid #5c2f12;
+    border-radius:12px;
+    background:#fff2bd;
+    color:#5c2f12;
+    font-family:'Mali',cursive;
+    font-size:17px;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 6px 0 #4a260f,0 12px 18px rgba(0,0,0,0.22);
+}
+
+.back-home:active{
+    transform:translateY(4px);
+    box-shadow:0 2px 0 #4a260f,0 7px 12px rgba(0,0,0,0.2);
+}
+
+.cover.is-loading .hero-sign,
+.cover.is-loading .wood-btn,
+.cover.is-loading .route-popup{
+    opacity:0;
+    pointer-events:none;
+}
+
+/* ================= ANIMATION ================= */
+
+@keyframes peekMonkey{
+    0%,100%{transform:translateY(58px) rotate(-6deg);opacity:0.25;}
+    40%,60%{transform:translateY(0px) rotate(0deg);opacity:1;}
+}
+
+@keyframes peekElephant{
+    0%,100%{transform:translateY(58px) rotate(6deg);opacity:0.25;}
+    40%,60%{transform:translateY(0px) rotate(0deg);opacity:1;}
+}
+
+@keyframes twinkle{
+    0%,100%{opacity:0.15;transform:scale(0.6);}
+    50%{opacity:1;transform:scale(1.1);}
+}
+
+@keyframes pawStep{
+    0%,100%{transform:translateY(0);opacity:0.35;}
+    45%{transform:translateY(-8px);opacity:1;}
+}
+
+@keyframes loadingMove{
+    0%{transform:translateX(-115%);}
+    55%{transform:translateX(85%);}
+    100%{transform:translateX(160%);}
+}
+
+@media(max-width:768px){
+    .hero-sign{
+        width:380px;
+        transform:translateX(-50%) scale(0.9);
+    }
+
+    .side-logo{
+        width:40px;
+        height:40px;
+    }
+
+    .wood-sign h1{
+        font-size:38px;
+    }
+
+    .wood-sign h2{
+        font-size:27px;
+    }
+
+    .title-top{
+        gap:10px;
+    }
+
+    .wood-btn{
+        width:42px;
+        height:42px;
+        font-size:19px;
+    }
+
+    .pin-group{
+        right:18px;
+        top:86px;
+        width:170px;
+        flex-direction:row;
+        flex-wrap:wrap;
+        justify-content:flex-end;
+        gap:10px;
+    }
+
+    .wood-btn::after{
+        min-width:150px;
+        font-size:13px;
+    }
+
+    .route-popup{
+        bottom:28px;
+        min-width:210px;
+        font-size:20px;
+        padding:14px 18px;
+    }
+
+    .loading-panel{
+        padding:24px 20px 22px;
+    }
+
+    .loading-panel h3{
+        font-size:28px;
+    }
+
+    .loading-panel p{
+        font-size:16px;
+    }
+
+    .route-name{
+        font-size:17px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="cover">
+
+    <div class="hero-sign">
+
+        <div class="ropes">
+            <div class="rope-line"></div>
+            <div class="rope-line"></div>
+        </div>
+
+        <div class="monkey">🐵</div>
+        <div class="elephant">🐘</div>
+
+        <div class="wood-sign">
+            <div class="wood-inner">
+
+                <div class="rope-holes">
+                    <div class="hole"></div>
+                    <div class="hole"></div>
+                </div>
+
+                <div class="screw tl"></div>
+                <div class="screw tr"></div>
+                <div class="screw bl"></div>
+                <div class="screw br"></div>
+
+                <div class="sparkle" style="top:12px;left:70px;">✨</div>
+                <div class="sparkle" style="top:12px;right:70px;animation-delay:0.9s;">✨</div>
+                <div class="sparkle" style="bottom:10px;left:100px;animation-delay:1.6s;">⭐</div>
+                <div class="sparkle" style="bottom:10px;right:100px;animation-delay:0.4s;">⭐</div>
+
+                <div class="sign-content">
+
+                    <div class="title-top">
+                        <img class="side-logo" src="KMUTT_CI_Semi_Logo-normal-full-1061x1200.png" alt="KMUTT Logo">
+                        <h1>สวนสัตว์</h1>
+                        <img class="side-logo" src="main-logo.png" alt="Korat Zoo Logo">
+                    </div>
+
+                    <div class="divider">
+                        <div class="divider-line"></div>
+                        <div class="divider-diamond"></div>
+                        <div class="divider-line"></div>
+                    </div>
+
+                    <h2>นครราชสีมา</h2>
+
+                </div>
+
+            </div>
+        </div>
+
+        <div class="posts">
+            <div class="post"></div>
+            <div class="post"></div>
+        </div>
+
+    </div>
+
+    <button class="route-popup" id="routePopup" type="button">เริ่มนำทาง</button>
+    <div class="pin-group" aria-label="เลือกจุดหมาย">
+        <button class="wood-btn is-active" type="button" data-destination="การแสดงให้อาหารเสือ" aria-label="เลือกการแสดงให้อาหารเสือ">
+            <span class="pin-icon">🐾</span>
+        </button>
+        <button class="wood-btn rhino-pin" type="button" data-destination="คลับแร๊ดแรด" aria-label="เลือกคลับแร๊ดแรด">
+            <span class="pin-icon">🦏</span>
+        </button>
+        <button class="wood-btn lion-pin" type="button" data-destination="สิงโต" aria-label="เลือกสิงโต">
+            <span class="pin-icon">🦁</span>
+        </button>
+        <button class="wood-btn deer-pin" type="button" data-destination="เดิ่นกวาง" aria-label="เลือกเดิ่นกวาง">
+            <span class="pin-icon">🦌</span>
+        </button>
+        <button class="wood-btn hippo-pin" type="button" data-destination="ฮิปโปโปเตมัส" aria-label="เลือกฮิปโปโปเตมัส">
+            <span class="pin-icon">🦛</span>
+        </button>
+    </div>
+
+    <section class="loading-screen" id="loadingScreen" aria-live="polite" aria-hidden="true">
+        <div class="loading-panel">
+            <h3>กำลังเริ่มนำทาง</h3>
+            <p>รถกอล์ฟกำลังพาเที่ยวสวนสัตว์</p>
+            <div class="route-name" id="routeName">จุดหมายถัดไป: การแสดงให้อาหารเสือ</div>
+            <div class="paw-loader" aria-hidden="true">
+                <span>🐾</span>
+                <span>🐾</span>
+                <span>🐾</span>
+                <span>🐾</span>
+                <span>🐾</span>
+            </div>
+            <div class="progress-track" aria-hidden="true">
+                <div class="progress-fill"></div>
+            </div>
+            <p class="safety-note">กรุณานั่งประจำที่ระหว่างรถออกตัว</p>
+            <button class="back-home" id="backHome" type="button">กลับหน้าแรก</button>
+        </div>
+    </section>
+
+</div>
+
+<script>
+const cover = document.querySelector('.cover');
+const routeButtons = document.querySelectorAll('.wood-btn');
+const routePopup = document.getElementById('routePopup');
+const routeName = document.getElementById('routeName');
+const loadingScreen = document.getElementById('loadingScreen');
+const backHome = document.getElementById('backHome');
+let selectedDestination = 'การแสดงให้อาหารเสือ';
+
+routeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+        selectedDestination = button.dataset.destination;
+        routeName.textContent = `จุดหมายถัดไป: ${selectedDestination}`;
+        routeButtons.forEach((item) => item.classList.remove('is-active'));
+        button.classList.add('is-active');
+        routePopup.classList.add('show');
+    });
+});
+
+routePopup.addEventListener('click', () => {
+    routePopup.classList.remove('show');
+    cover.classList.add('is-loading');
+    loadingScreen.classList.add('show');
+    loadingScreen.setAttribute('aria-hidden','false');
+});
+
+backHome.addEventListener('click', () => {
+    cover.classList.remove('is-loading');
+    loadingScreen.classList.remove('show');
+    loadingScreen.setAttribute('aria-hidden','true');
+});
+</script>
+
+</body>
+</html>

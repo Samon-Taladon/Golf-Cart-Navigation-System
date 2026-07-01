@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trajectory Viewer</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a23;
+    --surface2: #1e2330;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --text-muted: #7a8299;
+    --accent: #00e5a0;
+    --accent2: #3b82f6;
+    --warn: #f59e0b;
+    --fix-color: #00e5a0;
+    --float-color: #f59e0b;
+    --wp-color: #ffffff;
+    --font: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .header-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0,229,160,0.1);
+    color: var(--accent);
+    border: 0.5px solid rgba(0,229,160,0.3);
+    letter-spacing: 0.08em;
+  }
+  .header-actions { margin-left: auto; display: flex; gap: 10px; }
+
+  .upload-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    flex-shrink: 0;
+  }
+  .upload-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border: 0.5px dashed var(--border2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    background: var(--surface2);
+  }
+  .upload-box:hover { border-color: var(--accent); background: rgba(0,229,160,0.04); }
+  .upload-box.loaded { border-color: rgba(0,229,160,0.4); border-style: solid; }
+  .upload-box.loaded2 { border-color: rgba(59,130,246,0.4); border-style: solid; }
+  .upload-box input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .upload-icon.nav { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .upload-icon.wp { background: rgba(59,130,246,0.12); color: var(--accent2); }
+  .upload-label { font-size: 11px; color: var(--text-muted); }
+  .upload-name { font-size: 12px; color: var(--text); }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    cursor: crosshair;
+  }
+  canvas { display: block; }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    padding: 14px 16px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .sidebar-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    border: 0.5px solid var(--border);
+  }
+  .stat-card .s-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .stat-card .s-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .stat-card .s-unit {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: 2px;
+  }
+  .stat-card.green .s-value { color: var(--accent); }
+  .stat-card.blue .s-value  { color: var(--accent2); }
+  .stat-card.amber .s-value { color: var(--warn); }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .fix-counter {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .fix-pill {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .fix-pill.fix { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .fix-pill.flt { background: rgba(245,158,11,0.12); color: var(--warn); }
+
+  .hover-panel {
+    flex: 1;
+    padding: 14px 16px;
+    overflow-y: auto;
+  }
+  .hover-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .hover-title {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .hover-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 12px;
+  }
+  .hover-row:last-child { border-bottom: none; }
+  .hover-key { color: var(--text-muted); }
+  .hover-val { color: var(--text); font-weight: 600; }
+  .hover-val.green { color: var(--accent); }
+  .hover-val.amber { color: var(--warn); }
+  .hover-val.blue  { color: var(--accent2); }
+
+  .fix-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .fix-badge.rtk-fix   { background: rgba(0,229,160,0.15); color: var(--accent); }
+  .fix-badge.rtk-float { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .fix-badge.other     { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+
+  .cte-bar-wrap {
+    margin-top: 6px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--surface2);
+    overflow: hidden;
+  }
+  .cte-bar {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 0.2s;
+  }
+
+  .zoom-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(13,15,20,0.8);
+    padding: 4px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+  }
+
+  .tooltip {
+    position: absolute;
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    pointer-events: none;
+    font-size: 12px;
+    min-width: 180px;
+    z-index: 10;
+    display: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+  .tooltip.visible { display: block; }
+  .tt-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 3px 0;
+    color: var(--text);
+  }
+  .tt-key { color: var(--text-muted); }
+  .tt-val.green { color: var(--accent); font-weight: 600; }
+  .tt-val.amber { color: var(--warn); font-weight: 600; }
+
+  .btn {
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: var(--font);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .btn:hover { background: rgba(255,255,255,0.07); }
+
+  .no-data {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .no-data .icon { font-size: 32px; opacity: 0.3; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trajectory Viewer</h1>
+  <span class="header-badge">RTK-GPS</span>
+  <div class="header-actions">
+    <button class="btn" id="btn-fit">Fit view</button>
+    <button class="btn" id="btn-reset">Reset zoom</button>
+  </div>
+</header>
+
+<div class="upload-row">
+  <div class="upload-box" id="box-nav">
+    <input type="file" accept=".csv" id="input-nav">
+    <div class="upload-icon nav">📍</div>
+    <div>
+      <div class="upload-label">Navigation Result CSV</div>
+      <div class="upload-name" id="name-nav">x, y, speed, heading, fix_quality, steering_angle</div>
+    </div>
+  </div>
+  <div class="upload-box" id="box-wp">
+    <input type="file" accept=".csv" id="input-wp">
+    <div class="upload-icon wp">🗺</div>
+    <div>
+      <div class="upload-label">Waypoints CSV</div>
+      <div class="upload-name" id="name-wp">x, y (resampled path)</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div id="canvas-wrap">
+    <canvas id="cvs"></canvas>
+    <div class="no-data" id="no-data">
+      <span class="icon">⬆</span>
+      <span>Upload CSV files to visualize trajectory</span>
+    </div>
+    <div class="tooltip" id="tooltip">
+      <div class="tt-row"><span class="tt-key">Speed</span><span class="tt-val green" id="tt-speed">—</span></div>
+      <div class="tt-row"><span class="tt-key">Heading</span><span class="tt-val" id="tt-heading">—</span></div>
+      <div class="tt-row"><span class="tt-key">Fix quality</span><span class="tt-val" id="tt-fix">—</span></div>
+      <div class="tt-row"><span class="tt-key">Steering</span><span class="tt-val amber" id="tt-steer">—</span></div>
+      <div class="tt-row"><span class="tt-key">CTE</span><span class="tt-val" id="tt-cte">—</span></div>
+    </div>
+    <div class="zoom-hint">Scroll = zoom &nbsp;|&nbsp; Drag = pan &nbsp;|&nbsp; Hover = inspect</div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Statistics</div>
+      <div class="stat-grid" id="stats-grid">
+        <div class="stat-card green">
+          <div class="s-label">Avg Speed</div>
+          <div class="s-value" id="st-speed-avg">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Max Speed</div>
+          <div class="s-value" id="st-speed-max">—</div>
+        </div>
+        <div class="stat-card green">
+          <div class="s-label">Avg CTE</div>
+          <div class="s-value" id="st-cte-avg">—</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="s-label">Max CTE</div>
+          <div class="s-value" id="st-cte-max">—</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="s-label">Total Points</div>
+          <div class="s-value" id="st-pts">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Waypoints</div>
+          <div class="s-value" id="st-wp">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Legend</div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--fix-color)"></div>
+        <span>RTK Fix (quality = 4)</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--float-color)"></div>
+        <span>RTK Float (quality = 5)</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:rgba(255,255,255,0.5)"></div>
+        <span>Other quality</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--wp-color); border-radius:2px; width:14px; height:4px;"></div>
+        <span>Waypoints</span>
+      </div>
+      <div id="fix-counts" class="fix-counter" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="hover-panel" id="hover-panel">
+      <div class="hover-title">Hover info</div>
+      <div class="hover-empty" id="hover-empty">
+        Move cursor over the trajectory to inspect data points.
+      </div>
+      <div id="hover-data" style="display:none;">
+        <div class="hover-row">
+          <span class="hover-key">Index</span>
+          <span class="hover-val" id="hv-idx">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Position X</span>
+          <span class="hover-val" id="hv-x">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Position Y</span>
+          <span class="hover-val" id="hv-y">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Speed</span>
+          <span class="hover-val green" id="hv-spd">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Heading</span>
+          <span class="hover-val blue" id="hv-hdg">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Fix quality</span>
+          <span class="hover-val" id="hv-fix">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Steering angle</span>
+          <span class="hover-val amber" id="hv-steer">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">CTE</span>
+          <span class="hover-val" id="hv-cte">—</span>
+        </div>
+        <div class="cte-bar-wrap">
+          <div class="cte-bar" id="hv-cte-bar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+const tooltip = document.getElementById('tooltip');
+const noData = document.getElementById('no-data');
+
+let navData = null;
+let wpData = null;
+let cteArr = null;
+
+let transform = { x: 0, y: 0, scale: 1 };
+let dragging = false;
+let dragStart = { x: 0, y: 0 };
+let dragOrigin = { x: 0, y: 0 };
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    const obj = {};
+    header.forEach((h, j) => { obj[h] = parseFloat(parts[j]); });
+    rows.push(obj);
+  }
+  return rows.filter(r => !Object.values(r).some(v => isNaN(v)));
+}
+
+function computeCTE(nav, wp) {
+  const wps = wp.map(p => [p.x, p.y]);
+  return nav.map(pt => {
+    let minD = Infinity;
+    for (const [wx, wy] of wps) {
+      const d = Math.hypot(pt.x - wx, pt.y - wy);
+      if (d < minD) minD = d;
+    }
+    return minD;
+  });
+}
+
+function getBounds(points) {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function fitView() {
+  if (!navData) return;
+  const all = [...navData, ...(wpData || [])];
+  const b = getBounds(all);
+  const pw = wrap.clientWidth - 60;
+  const ph = wrap.clientHeight - 60;
+  const dw = b.maxX - b.minX || 1;
+  const dh = b.maxY - b.minY || 1;
+  const scale = Math.min(pw / dw, ph / dh);
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  transform.scale = scale;
+  transform.x = wrap.clientWidth / 2 - cx * scale;
+  transform.y = wrap.clientHeight / 2 - cy * scale;
+  render();
+}
+
+function toScreen(x, y) {
+  return [x * transform.scale + transform.x, y * transform.scale + transform.y];
+}
+function toWorld(sx, sy) {
+  return [(sx - transform.x) / transform.scale, (sy - transform.y) / transform.scale];
+}
+
+function fixLabel(q) {
+  if (q === 4) return 'RTK Fix';
+  if (q === 5) return 'RTK Float';
+  return 'Quality ' + q;
+}
+
+function render() {
+  cvs.width = wrap.clientWidth;
+  cvs.height = wrap.clientHeight;
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  if (!navData) return;
+
+  const pt = 1.8;
+
+  if (wpData) {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    for (const p of wpData) {
+      const [sx, sy] = toScreen(p.x, p.y);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < navData.length; i++) {
+    const p = navData[i];
+    const q = p.fix_quality;
+    let color = 'rgba(255,255,255,0.5)';
+    if (q === 4) color = '#00e5a0';
+    else if (q === 5) color = '#f59e0b';
+    const [sx, sy] = toScreen(p.x, p.y);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, pt, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function findNearest(mx, my) {
+  if (!navData) return null;
+  const [wx, wy] = toWorld(mx, my);
+  let best = null, bestD = Infinity;
+  for (let i = 0; i < navData.length; i++) {
+    const d = Math.hypot(navData[i].x - wx, navData[i].y - wy);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  const screenD = bestD * transform.scale;
+  if (screenD > 40) return null;
+  return best;
+}
+
+function showHover(idx, mx, my) {
+  if (idx === null) {
+    tooltip.classList.remove('visible');
+    document.getElementById('hover-empty').style.display = 'block';
+    document.getElementById('hover-data').style.display = 'none';
+    return;
+  }
+  const p = navData[idx];
+  const cte = cteArr ? cteArr[idx] : null;
+
+  document.getElementById('tt-speed').textContent = p.speed.toFixed(3) + ' m/s';
+  document.getElementById('tt-heading').textContent = p.heading.toFixed(1) + '°';
+  document.getElementById('tt-fix').textContent = fixLabel(p.fix_quality);
+  document.getElementById('tt-steer').textContent = p.steering_angle.toFixed(2) + '°';
+  document.getElementById('tt-cte').textContent = cte !== null ? cte.toFixed(3) + ' m' : '—';
+
+  let tx = mx + 16, ty = my - 10;
+  if (tx + 200 > wrap.clientWidth) tx = mx - 210;
+  if (ty + 140 > wrap.clientHeight) ty = my - 150;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
+  tooltip.classList.add('visible');
+
+  document.getElementById('hover-empty').style.display = 'none';
+  document.getElementById('hover-data').style.display = 'block';
+  document.getElementById('hv-idx').textContent = '#' + idx;
+  document.getElementById('hv-x').textContent = p.x.toFixed(3) + ' m';
+  document.getElementById('hv-y').textContent = p.y.toFixed(3) + ' m';
+  document.getElementById('hv-spd').textContent = p.speed.toFixed(3) + ' m/s';
+  document.getElementById('hv-hdg').textContent = p.heading.toFixed(1) + '°';
+
+  const fixEl = document.getElementById('hv-fix');
+  const label = fixLabel(p.fix_quality);
+  const cls = p.fix_quality === 4 ? 'rtk-fix' : p.fix_quality === 5 ? 'rtk-float' : 'other';
+  fixEl.innerHTML = `<span class="fix-badge ${cls}">${label}</span>`;
+
+  document.getElementById('hv-steer').textContent = p.steering_angle.toFixed(2) + '°';
+  if (cte !== null) {
+    document.getElementById('hv-cte').textContent = cte.toFixed(3) + ' m';
+    const maxCte = Math.max(...cteArr);
+    const pct = maxCte > 0 ? Math.min((cte / maxCte) * 100, 100) : 0;
+    document.getElementById('hv-cte-bar').style.width = pct + '%';
+    const col = pct < 30 ? 'var(--accent)' : pct < 60 ? 'var(--warn)' : '#ef4444';
+    document.getElementById('hv-cte-bar').style.background = col;
+  } else {
+    document.getElementById('hv-cte').textContent = '—';
+  }
+}
+
+function updateStats() {
+  if (!navData) return;
+  const speeds = navData.map(p => p.speed);
+  const avgSpd = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+  const maxSpd = Math.max(...speeds);
+  document.getElementById('st-speed-avg').textContent = avgSpd.toFixed(3);
+  document.getElementById('st-speed-max').textContent = maxSpd.toFixed(3);
+  document.getElementById('st-pts').textContent = navData.length.toLocaleString();
+  document.getElementById('st-wp').textContent = wpData ? wpData.length.toLocaleString() : '—';
+
+  if (cteArr) {
+    const avgCte = cteArr.reduce((a, b) => a + b, 0) / cteArr.length;
+    const maxCte = Math.max(...cteArr);
+    document.getElementById('st-cte-avg').textContent = avgCte.toFixed(3);
+    document.getElementById('st-cte-max').textContent = maxCte.toFixed(3);
+  }
+
+  const fixCount = navData.filter(p => p.fix_quality === 4).length;
+  const fltCount = navData.filter(p => p.fix_quality === 5).length;
+  document.getElementById('fix-counts').innerHTML =
+    `<span class="fix-pill fix">Fix: ${fixCount.toLocaleString()}</span>` +
+    `<span class="fix-pill flt">Float: ${fltCount.toLocaleString()}</span>`;
+}
+
+function tryProcess() {
+  if (!navData) return;
+  if (wpData) cteArr = computeCTE(navData, wpData);
+  noData.style.display = 'none';
+  updateStats();
+  fitView();
+}
+
+function readCSV(file, callback) {
+  const reader = new FileReader();
+  reader.onload = e => callback(e.target.result);
+  reader.readAsText(file);
+}
+
+document.getElementById('input-nav').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  readCSV(file, text => {
+    navData = parseCSV(text);
+    document.getElementById('name-nav').textContent = file.name + '  (' + navData.length + ' rows)';
+    document.getElementById('box-nav').classList.add('loaded');
+    tryProcess();
+  });
+});
+
+document.getElementById('input-wp').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  readCSV(file, text => {
+    wpData = parseCSV(text);
+    document.getElementById('name-wp').textContent = file.name + '  (' + wpData.length + ' pts)';
+    document.getElementById('box-wp').classList.add('loaded2');
+    if (navData) { cteArr = computeCTE(navData, wpData); updateStats(); render(); }
+  });
+});
+
+let lastIdx = null;
+wrap.addEventListener('mousemove', e => {
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (dragging) {
+    transform.x = dragOrigin.x + (mx - dragStart.x);
+    transform.y = dragOrigin.y + (my - dragStart.y);
+    render();
+    return;
+  }
+  const idx = findNearest(mx, my);
+  if (idx !== lastIdx) {
+    lastIdx = idx;
+    showHover(idx, mx, my);
+    if (navData) {
+      render();
+      if (idx !== null) {
+        const [sx, sy] = toScreen(navData[idx].x, navData[idx].y);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+      }
+    }
+  } else if (idx !== null) {
+    let tx = mx + 16, ty = my - 10;
+    if (tx + 200 > wrap.clientWidth) tx = mx - 210;
+    if (ty + 140 > wrap.clientHeight) ty = my - 150;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  }
+});
+
+wrap.addEventListener('mouseleave', () => {
+  tooltip.classList.remove('visible');
+  lastIdx = null;
+  render();
+});
+
+wrap.addEventListener('mousedown', e => {
+  dragging = true;
+  const r = wrap.getBoundingClientRect();
+  dragStart = { x: e.clientX - r.left, y: e.clientY - r.top };
+  dragOrigin = { ...transform };
+  wrap.style.cursor = 'grabbing';
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  wrap.style.cursor = 'crosshair';
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const newScale = Math.max(0.01, Math.min(5000, transform.scale * factor));
+  transform.x = mx - (mx - transform.x) * (newScale / transform.scale);
+  transform.y = my - (my - transform.y) * (newScale / transform.scale);
+  transform.scale = newScale;
+  render();
+}, { passive: false });
+
+document.getElementById('btn-fit').addEventListener('click', fitView);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  transform = { x: 0, y: 0, scale: 1 };
+  render();
+});
+
+const ro = new ResizeObserver(() => render());
+ro.observe(wrap);
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,283 @@
+# Navigation System Parameters
+
+navigation_controller:
+  ros__parameters:
+    # Coordinate system
+    origin_latitude: 13.7285
+    origin_longitude: 100.7825
+    
+    # Vehicle parameters
+    wheelbase: 2.5  # meters
+    max_velocity: 2.0  # m/s
+    min_velocity: 0.5  # m/s
+    max_steering_angle: 30.0  # degrees
+    
+    # Pure pursuit parameters
+    lookahead_distance: 3.0  # meters
+    lookahead_gain: 0.1
+    min_lookahead: 1.0  # meters
+    max_lookahead: 5.0  # meters
+    
+    # Control parameters
+    control_frequency: 10.0  # Hz
+    goal_tolerance: 1.0  # meters
+    
+    # GNSS parameters
+    serial_port: "/dev/ttyACM0"
+    baud_rate: 9600
+    
+    # NTRIP parameters (for RTK)
+    use_ntrip: true
+    ntrip_server: "110.78.0.54"
+    ntrip_port: 2116
+    ntrip_username: "1118600009224"
+    ntrip_password: "CK79"
+    ntrip_mountpoint: "VRS_RTCM32"
+    
+    # WebSocket parameters
+    websocket_host: "localhost"
+    websocket_port: 8765
+    
+    # Safety parameters
+    emergency_stop_distance: 0.5  # meters
+    max_acceleration: 1.0  # m/s²
+    max_deceleration: 2.0  # m/s²
+    
+    # Building coordinates (in GPS)
+    buildings:
+      S14:
+        name: "King Mongkut's 190th Anniversary Memorial Building"
+        latitude: 13.7297
+        longitude: 100.7827
+      S13:
+        name: "Classroom Building 3"
+        latitude: 13.7295
+        longitude: 100.7821
+      S12:
+        name: "Classroom Building 4"
+        latitude: 13.7285
+        longitude: 100.7819
+      S15:
+        name: "Department of Chemical Engineering Building"
+        latitude: 13.7277
+        longitude: 100.7823
+      N19:
+        name: "Production Engineering Laboratory Building 5"
+        latitude: 13.7276
+        longitude: 100.7828
+      N20:
+        name: "Classroom Building 1"
+        latitude: 13.7279
+        longitude: 100.7830
+      S11:
+        name: "Classroom Building 5"
+        latitude: 13.7276
+        longitude: 100.7820
+"""
+
+# setup.py (for ROS2 package)
+setup_py_content = '''
+from setuptools import setup
+import os
+from glob import glob
+
+package_name = 'navigation_system'
+
+setup(
+    name=package_name,
+    version='1.0.0',
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'),
+            glob('launch/*.py')),
+        (os.path.join('share', package_name, 'config'),
+            glob('config/*.yaml')),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='your_name',
+    maintainer_email='your_email@example.com',
+    description='Autonomous vehicle navigation system with pure pursuit control',
+    license='Apache License 2.0',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'navigation_controller = navigation_system.navigation_controller:main',
+        ],
+    },
+)
+'''
+
+# package.xml
+package_xml_content = '''
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>navigation_system</name>
+  <version>1.0.0</version>
+  <description>Autonomous vehicle navigation system with pure pursuit control</description>
+  <maintainer email="your_email@example.com">Your Name</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+'''
+
+# Enhanced navigation_controller.py with parameter loading
+enhanced_controller = '''
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.parameter import Parameter
+from sensor_msgs.msg import NavSatFix
+from geometry_msgs.msg import Twist, PoseStamped, Point
+from nav_msgs.msg import Odometry
+import serial
+import pynmea2
+import json
+import socket
+import asyncio
+import websockets
+import threading
+import math
+import numpy as np
+from typing import Tuple, List, Optional, Dict
+import time
+
+class ParameterizedNavigationController(Node):
+    """Enhanced navigation controller with parameter support"""
+    
+    def __init__(self):
+        super().__init__('navigation_controller')
+        
+        # Declare and get parameters
+        self.declare_parameters()
+        self.load_parameters()
+        
+        # Initialize components with parameters
+        self.coord_converter = CoordinateConverter(
+            origin_lat=self.origin_lat,
+            origin_lon=self.origin_lon
+        )
+        
+        self.bicycle_model = BicycleKinematicModel(wheelbase=self.wheelbase)
+        self.pure_pursuit = PurePursuitController(
+            lookahead_distance=self.lookahead_distance,
+            wheelbase=self.wheelbase
+        )
+        
+        # Continue with rest of initialization...
+        self.setup_navigation_system()
+        
+    def declare_parameters(self):
+        """Declare all ROS2 parameters"""
+        # Coordinate system parameters
+        self.declare_parameter('origin_latitude', 13.7285)
+        self.declare_parameter('origin_longitude', 100.7825)
+        
+        # Vehicle parameters
+        self.declare_parameter('wheelbase', 2.5)
+        self.declare_parameter('max_velocity', 2.0)
+        self.declare_parameter('min_velocity', 0.5)
+        self.declare_parameter('max_steering_angle', 30.0)
+        
+        # Pure pursuit parameters
+        self.declare_parameter('lookahead_distance', 3.0)
+        self.declare_parameter('lookahead_gain', 0.1)
+        self.declare_parameter('min_lookahead', 1.0)
+        self.declare_parameter('max_lookahead', 5.0)
+        
+        # Control parameters
+        self.declare_parameter('control_frequency', 10.0)
+        self.declare_parameter('goal_tolerance', 1.0)
+        
+        # GNSS parameters
+        self.declare_parameter('serial_port', '/dev/ttyACM0')
+        self.declare_parameter('baud_rate', 9600)
+        
+        # NTRIP parameters
+        self.declare_parameter('use_ntrip', True)
+        self.declare_parameter('ntrip_server', '110.78.0.54')
+        self.declare_parameter('ntrip_port', 2116)
+        self.declare_parameter('ntrip_username', '1118600009224')
+        self.declare_parameter('ntrip_password', 'CK79')
+        self.declare_parameter('ntrip_mountpoint', 'VRS_RTCM32')
+        
+        # WebSocket parameters
+        self.declare_parameter('websocket_host', 'localhost')
+        self.declare_parameter('websocket_port', 8765)
+        
+        # Safety parameters
+        self.declare_parameter('emergency_stop_distance', 0.5)
+        self.declare_parameter('max_acceleration', 1.0)
+        self.declare_parameter('max_deceleration', 2.0)
+        
+    def load_parameters(self):
+        """Load all parameters"""
+        # Coordinate system
+        self.origin_lat = self.get_parameter('origin_latitude').value
+        self.origin_lon = self.get_parameter('origin_longitude').value
+        
+        # Vehicle parameters
+        self.wheelbase = self.get_parameter('wheelbase').value
+        self.max_velocity = self.get_parameter('max_velocity').value
+        self.min_velocity = self.get_parameter('min_velocity').value
+        self.max_steering_angle = math.radians(self.get_parameter('max_steering_angle').value)
+        
+        # Pure pursuit parameters
+        self.lookahead_distance = self.get_parameter('lookahead_distance').value
+        self.lookahead_gain = self.get_parameter('lookahead_gain').value
+        self.min_lookahead = self.get_parameter('min_lookahead').value
+        self.max_lookahead = self.get_parameter('max_lookahead').value
+        
+        # Control parameters
+        self.control_frequency = self.get_parameter('control_frequency').value
+        self.goal_tolerance = self.get_parameter('goal_tolerance').value
+        
+        # GNSS parameters
+        self.serial_port = self.get_parameter('serial_port').value
+        self.baud_rate = self.get_parameter('baud_rate').value
+        
+        # NTRIP parameters
+        self.use_ntrip = self.get_parameter('use_ntrip').value
+        self.ntrip_server = self.get_parameter('ntrip_server').value
+        self.ntrip_port = self.get_parameter('ntrip_port').value
+        self.ntrip_username = self.get_parameter('ntrip_username').value
+        self.ntrip_password = self.get_parameter('ntrip_password').value
+        self.ntrip_mountpoint = self.get_parameter('ntrip_mountpoint').value
+        
+        # WebSocket parameters
+        self.websocket_host = self.get_parameter('websocket_host').value
+        self.websocket_port = self.get_parameter('websocket_port').value
+        
+        # Safety parameters
+        self.emergency_stop_distance = self.get_parameter('emergency_stop_distance').value
+        self.max_acceleration = self.get_parameter('max_acceleration').value
+        self.max_deceleration = self.get_parameter('max_deceleration').value
+        
+        self.get_logger().info(f"Parameters loaded successfully")
+'''
+
+print("Launch file and configuration templates:")
+print("\n1. launch/navigation_launch.py - ROS2 launch file")
+print("2. config/navigation_params.yaml - Configuration parameters")
+print("3. setup.py - Package setup")
+print("4. package.xml - Package metadata")
+print("5. Enhanced controller with parameter loading")

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Waypoint Planner with Deep Zoom Satellite Map</title>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <style>
+    #map { height: 90vh; margin: 0; padding: 0; }
+    body { margin: 0; padding: 0; }
+    button { margin: 10px; padding: 8px 16px; font-size: 16px; }
+  </style>
+</head>
+<body>
+
+<h2>ลากเส้นทางบนแผนที่ดาวเทียม (ซูมลึกสุด 21) แล้วกด Save เพื่อดาวน์โหลด Waypoints CSV</h2>
+<div id="map"></div>
+<button onclick="exportWaypoints()">📥 Save Waypoints (CSV)</button>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script>
+  const map = L.map('map', {
+    maxZoom: 21
+  }).setView([13.650621167373954,100.49300166692836], 17);
+
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 21,
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+  }).addTo(map);
+
+  const drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  const drawControl = new L.Control.Draw({
+    draw: {
+      polyline: true,
+      polygon: false,
+      rectangle: false,
+      circle: false,
+      marker: false
+    },
+    edit: {
+      featureGroup: drawnItems
+    }
+  });
+  map.addControl(drawControl);
+
+  let waypoints = [];
+
+  map.on(L.Draw.Event.CREATED, function (e) {
+    const layer = e.layer;
+    drawnItems.addLayer(layer);
+
+    const latlngs = layer.getLatLngs();
+    latlngs.forEach(point => {
+      waypoints.push({ lat: point.lat, lon: point.lng });
+    });
+
+    console.log("📍 Waypoints:", waypoints);
+  });
+
+  function exportWaypoints() {
+    if (waypoints.length === 0) {
+      alert("ยังไม่มี waypoint ให้บันทึกนะ!");
+      return;
+    }
+
+    let csvContent = "latitude,longitude\n";
+    waypoints.forEach(point => {
+      csvContent += `${point.lat},${point.lon}\n`;
+    });
+
+    const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "waypoints.csv");
+    dlAnchorElem.click();
+  }
+</script>
+
+</body>
+</html>

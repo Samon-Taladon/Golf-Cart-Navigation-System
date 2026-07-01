@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✂️ CSV Waypoint Filter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border: 3px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-section.dragover {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+        }
+
+        .control-group h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 100px;
+        }
+
+        input[type="number"], select {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 150px;
+        }
+
+        .btn-filter {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .btn-filter:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-download {
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            color: white;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-clear {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+            color: white;
+        }
+
+        .btn-clear:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .preview {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .preview h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stats-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+
+        .stats-card h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.8em;
+        }
+
+        .csv-preview {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .file-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 2px solid #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✂️ CSV Waypoint Filter</h1>
+            <p>กรองไฟล์ CSV waypoints ให้ห่างกัน 0.5 เมตร</p>
+        </div>
+
+        <div class="upload-section" id="uploadSection">
+            <div>
+                <h3>📁 อัปโหลดไฟล์ CSV</h3>
+                <p>ลากไฟล์มาวางหรือคลิกเพื่อเลือกไฟล์</p>
+                <input type="file" id="fileInput" class="file-input" accept=".csv,.txt" onchange="handleFileUpload(event)">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    📂 เลือกไฟล์ CSV
+                </button>
+            </div>
+        </div>
+
+        <div class="file-info" id="fileInfo" style="display: none;"></div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <div class="control-group">
+                <h3>📏 การกรองระยะห่าง</h3>
+                <div class="form-row">
+                    <label>ระยะห่างขั้นต่ำ:</label>
+                    <input type="number" id="minDistance" value="0.5" step="0.1" min="0.1" max="10">
+                    <span>เมตร</span>
+                </div>
+                <div class="form-row">
+                    <label>วิธีการกรอง:</label>
+                    <select id="filterMethod">
+                        <option value="distance">ระยะห่างเท่านั้น</option>
+                        <option value="adaptive">ปรับตามโค้ง</option>
+                        <option value="smart">อัจฉริยะ (เก็บมุมสำคัญ)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>🎯 ตัวเลือกเพิ่มเติม</h3>
+                <div class="form-row">
+                    <label>เก็บจุดเริ่มต้น:</label>
+                    <input type="checkbox" id="keepFirst" checked>
+                </div>
+                <div class="form-row">
+                    <label>เก็บจุดสิ้นสุด:</label>
+                    <input type="checkbox" id="keepLast" checked>
+                </div>
+                <div class="form-row">
+                    <label>เก็บมุมโค้ง:</label>
+                    <input type="checkbox" id="keepCorners" checked>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>📊 รูปแบบข้อมูล</h3>
+                <div class="form-row">
+                    <label>คอลัมน์ X:</label>
+                    <select id="xColumn"></select>
+                </div>
+                <div class="form-row">
+                    <label>คอลัมน์ Y:</label>
+                    <select id="yColumn"></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="buttons" id="actionButtons" style="display: none;">
+            <button class="btn-filter" onclick="filterWaypoints()">✂️ กรอง Waypoints</button>
+            <button class="btn-download" onclick="downloadFilteredCSV()" id="downloadBtn" disabled>📥 ดาวน์โหลด CSV</button>
+            <button class="btn-clear" onclick="clearAll()">🗑️ ล้างข้อมูล</button>
+        </div>
+
+        <div class="progress-bar" id="progressContainer" style="display: none;">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+
+        <div class="preview" id="preview" style="display: none;">
+            <h3>📊 ผลลัพธ์การกรอง</h3>
+            <div class="comparison">
+                <div class="stats-card">
+                    <h4>📁 ไฟล์ต้นฉบับ</h4>
+                    <div class="stats" id="originalStats"></div>
+                </div>
+                <div class="stats-card">
+                    <h4>✂️ หลังกรอง</h4>
+                    <div class="stats" id="filteredStats"></div>
+                </div>
+            </div>
+            <div class="csv-preview" id="csvPreview"></div>
+        </div>
+    </div>
+
+    <script>
+        let originalData = [];
+        let filteredData = [];
+        let csvHeaders = [];
+
+        // Drag and drop functionality
+        const uploadSection = document.getElementById('uploadSection');
+        
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        });
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processFile(file);
+            }
+        }
+
+        function processFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseCSV(content, file.name);
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(content, filename) {
+            try {
+                const lines = content.trim().split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                
+                csvHeaders = headers;
+                originalData = [];
+                
+                // Parse data
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    if (values.length >= 2) {
+                        const row = {};
+                        headers.forEach((header, index) => {
+                            row[header] = parseFloat(values[index]) || values[index];
+                        });
+                        originalData.push(row);
+                    }
+                }
+
+                displayFileInfo(filename, originalData.length, headers);
+                setupColumnSelectors(headers);
+                showControls();
+                
+            } catch (error) {
+                alert('ข้อผิดพลาดในการอ่านไฟล์: ' + error.message);
+            }
+        }
+
+        function displayFileInfo(filename, rowCount, headers) {
+            const fileInfo = document.getElementById('fileInfo');
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `
+                <h4>📁 ข้อมูลไฟล์</h4>
+                <p><strong>ชื่อไฟล์:</strong> ${filename}</p>
+                <p><strong>จำนวนแถว:</strong> ${rowCount.toLocaleString()} waypoints</p>
+                <p><strong>คอลัมน์:</strong> ${headers.join(', ')}</p>
+            `;
+        }
+
+        function setupColumnSelectors(headers) {
+            const xSelect = document.getElementById('xColumn');
+            const ySelect = document.getElementById('yColumn');
+            
+            xSelect.innerHTML = '';
+            ySelect.innerHTML = '';
+            
+            headers.forEach(header => {
+                const optionX = new Option(header, header);
+                const optionY = new Option(header, header);
+                xSelect.add(optionX);
+                ySelect.add(optionY);
+            });
+
+            // Auto-detect coordinate columns
+            const possibleX = ['x_east', 'x', 'easting', 'longitude', 'lon'];
+            const possibleY = ['y_north', 'y', 'northing', 'latitude', 'lat'];
+            
+            possibleX.forEach(px => {
+                const found = headers.find(h => h.toLowerCase().includes(px));
+                if (found) xSelect.value = found;
+            });
+            
+            possibleY.forEach(py => {
+                const found = headers.find(h => h.toLowerCase().includes(py));
+                if (found) ySelect.value = found;
+            });
+        }
+
+        function showControls() {
+            document.getElementById('controls').style.display = 'grid';
+            document.getElementById('actionButtons').style.display = 'flex';
+        }
+
+        function filterWaypoints() {
+            const xColumn = document.getElementById('xColumn').value;
+            const yColumn = document.getElementById('yColumn').value;
+            const minDistance = parseFloat(document.getElementById('minDistance').value);
+            const filterMethod = document.getElementById('filterMethod').value;
+            const keepFirst = document.getElementById('keepFirst').checked;
+            const keepLast = document.getElementById('keepLast').checked;
+            const keepCorners = document.getElementById('keepCorners').checked;
+
+            if (!xColumn || !yColumn) {
+                alert('กรุณาเลือกคอลัมน์ X และ Y');
+                return;
+            }
+
+            showProgress(true);
+            
+            setTimeout(() => {
+                try {
+                    filteredData = [];
+                    
+                    if (originalData.length === 0) return;
+                    
+                    // Always keep first point if requested
+                    if (keepFirst) {
+                        filteredData.push(originalData[0]);
+                    }
+                    
+                    // Filter middle points
+                    for (let i = 1; i < originalData.length - 1; i++) {
+                        const current = originalData[i];
+                        const last = filteredData[filteredData.length - 1];
+                        
+                        if (!last) {
+                            filteredData.push(current);
+                            continue;
+                        }
+                        
+                        const distance = calculateDistance(
+                            last[xColumn], last[yColumn],
+                            current[xColumn], current[yColumn]
+                        );
+                        
+                        let shouldKeep = false;
+                        
+                        switch (filterMethod) {
+                            case 'distance':
+                                shouldKeep = distance >= minDistance;
+                                break;
+                                
+                            case 'adaptive':
+                                const curvature = calculateCurvature(i, xColumn, yColumn);
+                                const adaptiveDistance = minDistance * (1 + curvature * 2);
+                                shouldKeep = distance >= adaptiveDistance;
+                                break;
+                                
+                            case 'smart':
+                                const isCorner = keepCorners && isSignificantCorner(i, xColumn, yColumn);
+                                shouldKeep = distance >= minDistance || isCorner;
+                                break;
+                        }
+                        
+                        if (shouldKeep) {
+                            filteredData.push(current);
+                        }
+                        
+                        // Update progress
+                        const progress = ((i / originalData.length) * 100);
+                        document.getElementById('progressFill').style.width = progress + '%';
+                    }
+                    
+                    // Always keep last point if requested
+                    if (keepLast && originalData.length > 1) {
+                        const lastOriginal = originalData[originalData.length - 1];
+                        const lastFiltered = filteredData[filteredData.length - 1];
+                        
+                        // Only add if it's different from the last filtered point
+                        if (lastFiltered[xColumn] !== lastOriginal[xColumn] || 
+                            lastFiltered[yColumn] !== lastOriginal[yColumn]) {
+                            filteredData.push(lastOriginal);
+                        }
+                    }
+                    
+                    showResults();
+                    
+                } catch (error) {
+                    alert('ข้อผิดพลาดในการกรอง: ' + error.message);
+                } finally {
+                    showProgress(false);
+                }
+            }, 100);
+        }
+
+        function calculateDistance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        function calculateCurvature(index, xCol, yCol) {
+            if (index <= 0 || index >= originalData.length - 1) return 0;
+            
+            const prev = originalData[index - 1];
+            const curr = originalData[index];
+            const next = originalData[index + 1];
+            
+            const angle1 = Math.atan2(curr[yCol] - prev[yCol], curr[xCol] - prev[xCol]);
+            const angle2 = Math.atan2(next[yCol] - curr[yCol], next[xCol] - curr[xCol]);
+            
+            let angleDiff = Math.abs(angle2 - angle1);
+            if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+            
+            return angleDiff / Math.PI; // Normalize to 0-1
+        }
+
+        function isSignificantCorner(index, xCol, yCol) {
+            const curvature = calculateCurvature(index, xCol, yCol);
+            return curvature > 0.1; // Threshold for significant corner
+        }
+
+        function showProgress(show) {
+            document.getElementById('progressContainer').style.display = show ? 'block' : 'none';
+            if (!show) {
+                document.getElementById('progressFill').style.width = '0%';
+            }
+        }
+
+        function showResults() {
+            const xColumn = document.getElementById('xColumn').value;
+            const yColumn = document.getElementById('yColumn').value;
+            
+            // Calculate statistics
+            const originalCount = originalData.length;
+            const filteredCount = filteredData.length;
+            const reduction = ((originalCount - filteredCount) / originalCount * 100).toFixed(1);
+            
+            // Calculate total distances
+            const originalDistance = calculateTotalDistance(originalData, xColumn, yColumn);
+            const filteredDistance = calculateTotalDistance(filteredData, xColumn, yColumn);
+            
+            // Show statistics
+            document.getElementById('originalStats').innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${originalCount.toLocaleString()}</div>
+                    <div class="stat-label">จุด</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${originalDistance.toFixed(1)}m</div>
+                    <div class="stat-label">ระยะทาง</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${(originalDistance / Math.max(1, originalCount - 1)).toFixed(2)}m</div>
+                    <div class="stat-label">ระยะห่างเฉลี่ย</div>
+                </div>
+            `;
+            
+            document.getElementById('filteredStats').innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${filteredCount.toLocaleString()}</div>
+                    <div class="stat-label">จุด</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${filteredDistance.toFixed(1)}m</div>
+                    <div class="stat-label">ระยะทาง</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${(filteredDistance / Math.max(1, filteredCount - 1)).toFixed(2)}m</div>
+                    <div class="stat-label">ระยะห่างเฉลี่ย</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${reduction}%</div>
+                    <div class="stat-label">ลดลง</div>
+                </div>
+            `;
+            
+            // Show CSV preview
+            let csvContent = csvHeaders.join(',') + '\n';
+            const previewLines = Math.min(10, filteredData.length);
+            
+            for (let i = 0; i < previewLines; i++) {
+                const row = filteredData[i];
+                const values = csvHeaders.map(header => row[header]);
+                csvContent += values.join(',') + '\n';
+            }
+            
+            if (filteredData.length > previewLines) {
+                csvContent += `... และอีก ${filteredData.length - previewLines} แถว\n`;
+            }
+            
+            document.getElementById('csvPreview').textContent = csvContent;
+            document.getElementById('preview').style.display = 'block';
+            document.getElementById('downloadBtn').disabled = false;
+        }
+
+        function calculateTotalDistance(data, xCol, yCol) {
+            let total = 0;
+            for (let i = 1; i < data.length; i++) {
+                total += calculateDistance(
+                    data[i-1][xCol], data[i-1][yCol],
+                    data[i][xCol], data[i][yCol]
+                );
+            }
+            return total;
+        }
+
+        function downloadFilteredCSV() {
+            if (filteredData.length === 0) {
+                alert('กรุณากรองข้อมูลก่อน!');
+                return;
+            }
+
+            let csvContent = csvHeaders.join(',') + '\n';
+            filteredData.forEach(row => {
+                const values = csvHeaders.map(header => row[header]);
+                csvContent += values.join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const minDist = document.getElementById('minDistance').value;
+            const filename = `waypoints_filtered_${minDist}m_${filteredData.length}points.csv`;
+            
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+
+        function clearAll() {
+            originalData = [];
+            filteredData = [];
+            csvHeaders = [];
+            
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('controls').style.display = 'none';
+            document.getElementById('actionButtons').style.display = 'none';
+            document.getElementById('preview').style.display = 'none';
+            document.getElementById('downloadBtn').disabled = true;
+            document.getElementById('fileInput').value = '';
+        }
+    </script>
+</body>
+</html>

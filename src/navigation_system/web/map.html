@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Real-time GNSS Location on Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        h2 {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 5px 15px;
+            border-radius: 5px;
+            margin: 0;
+        }
+        #destinationInfo {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 5px 15px;
+            border-radius: 5px;
+            margin: 0;
+            display: none;
+            font-weight: bold;
+        }
+        #arrivalNotification {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            display: none;
+        }
+        #homeButton {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin-top: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        #debugInfo {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+        }
+        #statusIndicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .connected {
+            background-color: rgba(76, 175, 80, 0.8);
+            color: white;
+        }
+        .disconnected {
+            background-color: rgba(244, 67, 54, 0.8);
+            color: white;
+        }
+        .connecting {
+            background-color: rgba(255, 193, 7, 0.8);
+            color: black;
+        }
+        #connectionSettings {
+            position: absolute;
+            top: 60px;
+            right: 10px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #connectionSettings input {
+            margin: 2px 0;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        #connectionSettings button {
+            margin-top: 8px;
+            padding: 6px 12px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #connectionSettings button:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <h2>Real-time GNSS Location on Map</h2>
+    <div id="destinationInfo"></div>
+    <div id="statusIndicator" class="disconnected">Disconnected</div>
+    <div id="connectionSettings">
+        <div><strong>WebSocket Connection</strong></div>
+        <div>Server IP: <input type="text" id="serverIP" placeholder="192.168.1.184" style="width: 120px;"></div>
+        <div>Port: <input type="number" id="serverPort" value="5000" style="width: 60px;"></div>
+        <button onclick="reconnectWebSocket()">Reconnect</button>
+        <div style="margin-top: 8px; font-size: 11px; color: #666;">
+            <div>Attempts: <span id="reconnectCount">0</span>/10</div>
+            <div>Last error: <span id="lastError">None</span></div>
+        </div>
+    </div>
+    <div id="map"></div>
+    <div id="arrivalNotification">
+        <h3>Arrived at destination!</h3>
+        <p id="buildingInfo"></p>
+        <button id="homeButton" onclick="goToHome()">กลับหน้าหลัก</button>
+    </div>
+    <div id="debugInfo">
+        <strong>Debug Log:</strong><br>
+        Initializing...
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <script>
+        let map, userMarker, destinationMarker, routeControl;
+        let destination = null;
+        let buildingNames = {
+            "S14": "King Mongkut's 190th Anniversary Building",
+            "S13": "Classroom Building 3",
+            "S12": "Classroom Building 4",
+            "S11": "Classroom Building 5",
+            "S15": "Department of Chemical Engineering Building",
+            "N19": "Production Engineering Laboratory Building 5",
+            "N20": "Classroom Building 1"
+        };
+
+        const availableDestinations = {
+            "S14": { lat: 13.650940, lon: 100.492070 },
+            "S13": { lat: 13.650076, lon: 100.492140 },
+            "S12": { lat: 13.649913, lon: 100.492690 },
+            "S11": { lat: 13.649992, lon: 100.493327 },
+            "S15": { lat: 13.650154, lon: 100.492984 },
+            "N19": { lat: 13.651010, lon: 100.492980 },
+            "N20": { lat: 13.6513894, lon: 100.4929824 }
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const destinationParam = urlParams.get('destination');
+        
+        // Audio control variables
+        let arrivalAnnounced = false;
+        let speechSynthesis = window.speechSynthesis;
+        
+        // Debug and status elements
+        const debugElement = document.getElementById('debugInfo');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const reconnectCountElement = document.getElementById('reconnectCount');
+        const lastErrorElement = document.getElementById('lastError');
+
+        // WebSocket variables
+        let socket;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 10;
+        let socketURL = '';
+        let isManualReconnect = false;
+        let connectionTimeout;
+
+        // Function to get WebSocket URL
+        function getWebSocketURL() {
+            const serverIP = document.getElementById('serverIP').value.trim() || getDefaultIP();
+            const serverPort = document.getElementById('serverPort').value.trim() || '5000';
+            return `ws://${serverIP}:${serverPort}`;
+        }
+
+        // Function to get default IP
+        function getDefaultIP() {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return '127.0.0.1';
+            } else if (hostname.match(/^192\.168\./)) {
+                return hostname;
+            } else {
+                // Try to detect local network IP
+                return '192.168.1.184'; // Default fallback
+            }
+        }
+
+        // Initialize default IP
+        window.addEventListener('load', () => {
+            const defaultIP = getDefaultIP();
+            document.getElementById('serverIP').value = defaultIP;
+            debug(`Default IP set to: ${defaultIP}`);
+        });
+
+        function debug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            console.log(logMessage);
+            
+            if (debugElement) {
+                debugElement.innerHTML += logMessage + "<br>";
+                
+                // Keep only the last 10 lines
+                const lines = debugElement.innerHTML.split("<br>");
+                if (lines.length > 11) { // +1 for the header
+                    const header = "<strong>Debug Log:</strong>";
+                    const recentLines = lines.slice(-10);
+                    debugElement.innerHTML = header + "<br>" + recentLines.join("<br>");
+                }
+                
+                // Auto scroll to bottom
+                debugElement.scrollTop = debugElement.scrollHeight;
+            }
+        }
+
+        function updateStatus(status, className) {
+            statusIndicator.textContent = status;
+            statusIndicator.className = className;
+            reconnectCountElement.textContent = reconnectAttempts;
+        }
+
+        function updateLastError(error) {
+            lastErrorElement.textContent = error;
+        }
+
+        // Speech synthesis function
+        function speak(text) {
+            if (!speechSynthesis) {
+                debug("Speech synthesis not supported");
+                return;
+            }
+            
+            speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            speechSynthesis.speak(utterance);
+            debug("Speaking: " + text);
+        }
+
+        let buildingCode = null;
+        if (destinationParam) {
+            buildingCode = destinationParam.split(' ')[0];
+            debug(`Destination parameter found: ${buildingCode}`);
+            
+            if (availableDestinations[buildingCode]) {
+                setTimeout(() => {
+                    setDestination(buildingCode);
+                }, 1000); // Increased delay to ensure connection
+            } else {
+                debug(`Invalid destination code: ${buildingCode}`);
+            }
+        }
+        
+        function connectWebSocket() {
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+            }
+
+            socketURL = getWebSocketURL();
+            debug(`Attempting WebSocket connection to ${socketURL} (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+            updateStatus("Connecting...", "connecting");
+            
+            // Close existing socket if any
+            if (socket) {
+                socket.onclose = null; // Prevent reconnect
+                socket.close();
+            }
+
+            try {
+                socket = new WebSocket(socketURL);
+                
+                // Set connection timeout
+                connectionTimeout = setTimeout(() => {
+                    if (socket.readyState === WebSocket.CONNECTING) {
+                        debug("Connection timeout - closing socket");
+                        socket.close();
+                        updateLastError("Connection timeout");
+                    }
+                }, 10000); // 10 second timeout
+
+                socket.onopen = function() {
+                    clearTimeout(connectionTimeout);
+                    debug("✅ WebSocket connection successful!");
+                    updateStatus("Connected", "connected");
+                    updateLastError("None");
+                    reconnectAttempts = 0;
+                    
+                    // Send destination if available
+                    if (buildingCode && availableDestinations[buildingCode]) {
+                        sendDestinationToServer(buildingCode);
+                    }
+                };
+                
+                socket.onerror = function(error) {
+                    clearTimeout(connectionTimeout);
+                    const errorMsg = `Connection failed to ${socketURL}`;
+                    debug(`❌ WebSocket error: ${errorMsg}`);
+                    updateLastError("Connection failed");
+                    updateStatus("Connection Failed", "disconnected");
+                };
+                
+                socket.onclose = function(event) {
+                    clearTimeout(connectionTimeout);
+                    const reason = event.reason || "Unknown reason";
+                    const code = event.code;
+                    debug(`🔌 WebSocket closed: Code ${code} - ${reason}`);
+                    updateStatus("Disconnected", "disconnected");
+                    updateLastError(`Code ${code}: ${reason}`);
+                    
+                    // Auto reconnect logic
+                    if (!isManualReconnect && reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        const timeout = Math.min(2000 * Math.pow(1.5, reconnectAttempts - 1), 15000);
+                        debug(`Reconnecting in ${timeout/1000} seconds...`);
+                        setTimeout(() => {
+                            if (reconnectAttempts <= maxReconnectAttempts) {
+                                connectWebSocket();
+                            }
+                        }, timeout);
+                    } else if (reconnectAttempts >= maxReconnectAttempts) {
+                        debug("❌ Max reconnection attempts reached");
+                        updateLastError("Max attempts reached");
+                    }
+                };
+                
+                socket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleLocationUpdate(data);
+                    } catch (e) {
+                        debug(`❌ Error parsing message: ${e.message}`);
+                        debug(`Raw data: ${event.data}`);
+                    }
+                };
+
+            } catch (error) {
+                debug(`❌ Failed to create WebSocket: ${error.message}`);
+                updateLastError(error.message);
+                updateStatus("Connection Failed", "disconnected");
+            }
+        }
+
+        function handleLocationUpdate(data) {
+            if (data.latitude !== undefined && data.longitude !== undefined) {
+                const latitude = data.latitude;
+                const longitude = data.longitude;
+                
+                debug(`📍 Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+                
+                // Initialize map if needed
+                if (!map) {
+                    initializeMap(latitude, longitude);
+                } else {
+                    map.setView([latitude, longitude], 20);
+                }
+                
+                // Update user marker
+                updateUserMarker(latitude, longitude);
+                
+                // Handle destination logic
+                if (destination) {
+                    handleDestinationLogic(latitude, longitude);
+                }
+            } else {
+                debug(`📨 Received: ${JSON.stringify(data)}`);
+            }
+        }
+
+        function initializeMap(lat, lon) {
+            debug(`🗺️ Initializing map at ${lat}, ${lon}`);
+            map = L.map('map').setView([lat, lon], 20);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            
+            // Set destination if available
+            if (buildingCode && availableDestinations[buildingCode] && !destination) {
+                setDestination(buildingCode);
+            }
+        }
+
+        function updateUserMarker(lat, lon) {
+            if (userMarker) {
+                userMarker.setLatLng([lat, lon]);
+            } else {
+                userMarker = L.marker([lat, lon], { draggable: false }).addTo(map);
+                userMarker.bindPopup("Current Position").openPopup();
+            }
+        }
+
+        function handleDestinationLogic(lat, lon) {
+            const destLatLng = destination;
+            const bearing = getBearing(lat, lon, destLatLng.lat, destLatLng.lon);
+            const distance = calculateDistance(lat, lon, destLatLng.lat, destLatLng.lon);
+            
+            // Send bearing to server
+            sendBearingToServer(bearing);
+            
+            debug(`🎯 Distance: ${distance.toFixed(2)}m, Bearing: ${bearing.toFixed(2)}°`);
+            
+            // Check arrival
+            if (distance < 5) {
+                if (!arrivalAnnounced) {
+                    arrivalAnnounced = true;
+                    debug("🎉 Arrived at destination!");
+                    
+                    const buildingName = buildingNames[buildingCode] || buildingCode;
+                    const arrivalMessage = `You have arrived at ${buildingCode}, ${buildingName}. Thank you for using our service.`;
+                    speak(arrivalMessage);
+                    showArrivalNotification(buildingCode);
+                }
+            } else {
+                hideArrivalNotification();
+                if (arrivalAnnounced && distance > 8) {
+                    arrivalAnnounced = false;
+                    debug("↩️ Reset arrival status - moved away");
+                }
+            }
+
+            // Update route
+            updateRoute(lat, lon, destLatLng);
+        }
+
+        function sendDestinationToServer(destinationCode) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({ destination: destinationCode });
+                socket.send(message);
+                debug(`📤 Sent destination: ${destinationCode}`);
+            } else {
+                debug(`❌ Cannot send destination - WebSocket not connected`);
+            }
+        }
+
+        function sendBearingToServer(bearing) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({ bearing: bearing });
+                socket.send(message);
+            }
+        }
+
+        function updateRoute(userLat, userLon, destLatLng) {
+            if (routeControl) {
+                routeControl.setWaypoints([
+                    L.latLng(userLat, userLon), 
+                    L.latLng(destLatLng.lat, destLatLng.lon)
+                ]);
+            }
+        }
+
+        // Function to manually reconnect
+        function reconnectWebSocket() {
+            debug("🔄 Manual reconnection requested");
+            isManualReconnect = true;
+            reconnectAttempts = 0;
+            
+            if (socket) {
+                socket.onclose = null;
+                socket.close();
+            }
+            
+            setTimeout(() => {
+                isManualReconnect = false;
+                connectWebSocket();
+            }, 100);
+        }
+
+        function setDestination(destinationCode) {
+            const selectedDestination = availableDestinations[destinationCode];
+            
+            if (!selectedDestination) {
+                debug(`❌ Invalid destination: ${destinationCode}`);
+                return;
+            }
+            
+            destination = selectedDestination;
+            buildingCode = destinationCode;
+            arrivalAnnounced = false;
+
+            debug(`🎯 Destination set: ${destinationCode}`);
+            updateDestinationInfo(destinationCode);
+
+            if (map) {
+                // Add destination marker
+                if (destinationMarker) {
+                    destinationMarker.setLatLng([selectedDestination.lat, selectedDestination.lon]);
+                } else {
+                    destinationMarker = L.marker([selectedDestination.lat, selectedDestination.lon])
+                        .addTo(map)
+                        .bindPopup(`${destinationCode}: ${buildingNames[destinationCode] || destinationCode}`);
+                }
+
+                // Setup routing
+                if (routeControl) {
+                    map.removeControl(routeControl);
+                }
+
+                if (userMarker) {
+                    routeControl = L.Routing.control({
+                        waypoints: [
+                            L.latLng(userMarker.getLatLng()),
+                            L.latLng(selectedDestination.lat, selectedDestination.lon)
+                        ],
+                        routeWhileDragging: false,
+                        addWaypoints: false,
+                        createMarker: function() { return null; } // Don't create duplicate markers
+                    }).addTo(map);
+                }
+            }
+
+            // Send to server
+            sendDestinationToServer(destinationCode);
+        }
+
+        function updateDestinationInfo(buildingCode) {
+            const destinationInfo = document.getElementById('destinationInfo');
+            const buildingName = buildingNames[buildingCode] || buildingCode;
+            destinationInfo.innerHTML = `🎯 Destination: ${buildingCode} - ${buildingName}`;
+            destinationInfo.style.display = 'block';
+        }
+
+        function getBearing(lat1, lon1, lat2, lon2) {
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const y = Math.sin(Δλ) * Math.cos(φ2);
+            const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+            const θ = Math.atan2(y, x);
+            return (θ * 180 / Math.PI + 360) % 360;
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth's radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function showArrivalNotification(building) {
+            const arrivalNotification = document.getElementById('arrivalNotification');
+            const buildingInfo = document.getElementById('buildingInfo');
+            
+            const buildingName = buildingNames[building] || building;
+            buildingInfo.innerText = `${building}: ${buildingName}`;
+            arrivalNotification.style.display = 'block';
+        }
+
+        function hideArrivalNotification() {
+            document.getElementById('arrivalNotification').style.display = 'none';
+        }
+
+        function goToHome() {
+            window.location.href = 'maptest.html';
+        }
+
+        // Initialize WebSocket connection on page load
+        window.addEventListener('load', () => {
+            debug("🚀 Page loaded, starting WebSocket connection...");
+            connectWebSocket();
+        });
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                debug("📱 Page became visible");
+                if (!socket || socket.readyState !== WebSocket.OPEN) {
+                    debug("🔄 Reconnecting due to page visibility change...");
+                    connectWebSocket();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
