@@ -2802,7 +2802,8 @@ import time
 import datetime
 
 # ---------------- PATH ----------------
-LOG_DIR  = "/home/inc/ros2_ws/src/navigation_system/logs14"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR  = os.path.join(SCRIPT_DIR, "science building")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 TS       = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")

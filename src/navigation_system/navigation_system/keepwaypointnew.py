@@ -17,7 +17,8 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 
 
-LOG_DIR = "/home/inc/ros2_ws/src/navigation_system/logs14"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(SCRIPT_DIR, "logs14")
 GNSS_PORT = "/dev/ttyACM0"
 GNSS_BAUD = 115200
 
@@ -468,6 +469,8 @@ class KeepWaypointNew(Node):
 
 
 def main(args=None):
+    os.makedirs(LOG_DIR, exist_ok=True)
+    os.environ.setdefault("ROS_LOG_DIR", LOG_DIR)
     rclpy.init(args=args)
     node = KeepWaypointNew()
     try:

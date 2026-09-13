@@ -237,7 +237,7 @@ class SteeringNode(Node):
 
         os.system('sudo ifconfig can0 down')
         os.system('sudo ip link set can0 type can bitrate 250000')
-        os.system('sudo ifconfig can0 txqueuelen 100000')
+        os.system('sudo ifconfig can0txqueuelen 100000')
         os.system('sudo ifconfig can0 up')
 
         time.sleep(1.0)

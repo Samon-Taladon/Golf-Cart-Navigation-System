@@ -828,7 +828,9 @@ class PurePursuitController(Node):
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('frame_id', 'odom')
         self.declare_parameter('wheelbase', 1.67)
-        self.declare_parameter('target_speed', 1.5)
+        self.declare_parameter('target_speed', 1.75)
+        self.declare_parameter('min_speed', 1.5)
+        self.declare_parameter('max_speed', 1.75)
         # self.declare_parameter('min_lookahead', 3.0)
         self.declare_parameter('min_lookahead', 1.5)
         # self.declare_parameter('max_lookahead', 8.0)
@@ -847,8 +849,8 @@ class PurePursuitController(Node):
         self.declare_parameter('debug_period', 1.0)
         self.declare_parameter('rtk_float_timeout', 1.0)
         self.declare_parameter('rtk_no_fix_timeout', 1.0)
-        self.declare_parameter('float_speed_limit', 0.4)
-        self.declare_parameter('fix_speed_limit', 1.0)
+        self.declare_parameter('float_speed_limit', 1.75)
+        self.declare_parameter('fix_speed_limit', 1.75)
         self.declare_parameter('float_min_lookahead', 2.5)
         self.declare_parameter('float_alpha_min', 0.08)
         self.declare_parameter('float_alpha_max', 0.45)
@@ -875,6 +877,8 @@ class PurePursuitController(Node):
 
         self.wheelbase = float(self.get_parameter('wheelbase').value)
         self.target_speed = float(self.get_parameter('target_speed').value)
+        self.min_speed = float(self.get_parameter('min_speed').value)
+        self.max_speed = float(self.get_parameter('max_speed').value)
         self.min_lookahead = float(self.get_parameter('min_lookahead').value)
         self.max_lookahead = float(self.get_parameter('max_lookahead').value)
         self.lookahead_base = float(self.get_parameter('lookahead_base').value)
@@ -1038,7 +1042,8 @@ class PurePursuitController(Node):
 
     @staticmethod
     def default_path_file() -> str:
-        return '/home/inc/ros2_ws/src/navigation_system/logs14/path_smoothlog14_resampled_1m.csv'
+        # return '/home/inc/ros2_ws/src/navigation_system/logs14/path_smoothlog14_resampled_1m.csv'
+        return '/home/kr-zoo/ros2_ws/src/navigation_system/logs_zoo2/path_smoothlogs_zoo2_resampled_1m.csv'
 
     @staticmethod
     def default_output_log_dir() -> str:
@@ -1767,11 +1772,14 @@ class PurePursuitController(Node):
 
     def get_command_speed(self) -> float:
         if self.rtk_state == 'FIX':
-            return min(self.target_speed, self.fix_speed_limit)
+            speed = min(self.target_speed, self.fix_speed_limit)
+            return self.clamp(speed, self.min_speed, self.max_speed)
         if self.rtk_state in ('FLOAT', 'NO_FIX') and self.filter_active:
-            return min(self.target_speed, self.float_speed_limit)
+            speed = min(self.target_speed, self.float_speed_limit)
+            return self.clamp(speed, self.min_speed, self.max_speed)
         if self.rtk_state == 'DGPS':
-            return min(self.target_speed, self.float_speed_limit)
+            speed = min(self.target_speed, self.float_speed_limit)
+            return self.clamp(speed, self.min_speed, self.max_speed)
         return 0.0
 
     def stop_vehicle(self) -> None:

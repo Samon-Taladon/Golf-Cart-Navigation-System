@@ -803,6 +803,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from std_msgs.msg import Float64
 from tf_transformations import euler_from_quaternion
 from visualization_msgs.msg import Marker
 
@@ -820,6 +821,7 @@ class PurePursuitController(Node):
 
         self.declare_parameter('path_file', self.default_path_file())
         self.declare_parameter('odom_topic', '/odom')
+        self.declare_parameter('speed_status_topic', '/speed_status')
         self.declare_parameter('drive_topic', '/drive')
         self.declare_parameter('cmd_vel_topic', '/cmd_vel')
         self.declare_parameter('frame_id', 'odom')
@@ -839,11 +841,14 @@ class PurePursuitController(Node):
         self.declare_parameter('debug_period', 1.0)
         self.declare_parameter('rtk_float_timeout', 1.0)
         self.declare_parameter('rtk_no_fix_timeout', 1.0)
-        self.declare_parameter('float_speed_limit', 0.4)
+        self.declare_parameter('float_speed_limit', 0.7)
         self.declare_parameter('fix_speed_limit', 1.0)
+        self.declare_parameter('max_speed_accel', 0.30)
+        self.declare_parameter('max_speed_decel', 0.60)
         self.declare_parameter('float_min_lookahead', 2.5)
         self.declare_parameter('bicycle_model_steering_gain', 1.0)
         self.declare_parameter('max_float_duration', 10.0)
+        self.declare_parameter('encoder_speed_timeout', 0.5)
         self.declare_parameter('position_jump_margin', 0.35)
         self.declare_parameter('min_jump_threshold', 0.45)
         self.declare_parameter('enable_output_log', True)
@@ -852,6 +857,7 @@ class PurePursuitController(Node):
 
         self.path_file = self.get_parameter('path_file').value
         self.odom_topic = self.get_parameter('odom_topic').value
+        self.speed_status_topic = self.get_parameter('speed_status_topic').value
         self.drive_topic = self.get_parameter('drive_topic').value
         self.cmd_vel_topic = self.get_parameter('cmd_vel_topic').value
         self.frame_id = self.get_parameter('frame_id').value
@@ -892,6 +898,12 @@ class PurePursuitController(Node):
             self.get_parameter('float_speed_limit').value
         )
         self.fix_speed_limit = float(self.get_parameter('fix_speed_limit').value)
+        self.max_speed_accel = float(
+            self.get_parameter('max_speed_accel').value
+        )
+        self.max_speed_decel = float(
+            self.get_parameter('max_speed_decel').value
+        )
         self.float_min_lookahead = float(
             self.get_parameter('float_min_lookahead').value
         )
@@ -900,6 +912,9 @@ class PurePursuitController(Node):
         )
         self.max_float_duration = float(
             self.get_parameter('max_float_duration').value
+        )
+        self.encoder_speed_timeout = float(
+            self.get_parameter('encoder_speed_timeout').value
         )
         self.position_jump_margin = float(
             self.get_parameter('position_jump_margin').value
@@ -934,10 +949,13 @@ class PurePursuitController(Node):
         self.bicycle_y = 0.0
         self.bicycle_yaw = 0.0
         self.bicycle_active = False
-        self.ublox_speed = 0.0
+        self.encoder_speed = 0.0
+        self.last_encoder_speed_time = None
+        self.vehicle_speed = 0.0
         self.ublox_yaw = 0.0
         self.bicycle_propagation_count = 0
         self.last_commanded_speed = 0.0
+        self.last_speed_command_time = None
 
         self.path: List[Tuple[float, float]] = []
         self.path_loaded = False
@@ -960,6 +978,12 @@ class PurePursuitController(Node):
             Odometry,
             self.odom_topic,
             self.odom_callback,
+            10,
+        )
+        self.speed_status_sub = self.create_subscription(
+            Float64,
+            self.speed_status_topic,
+            self.speed_status_callback,
             10,
         )
 
@@ -992,12 +1016,17 @@ class PurePursuitController(Node):
         self.get_logger().info(
             'Pure Pursuit controller started: '
             f'path={self.path_file}, odom={self.odom_topic}, '
+            f'speed_status={self.speed_status_topic}, '
             f'drive={self.drive_topic}, cmd_vel={self.cmd_vel_topic}'
         )
 
     @staticmethod
     def default_path_file() -> str:
-        return '/home/inc/ros2_ws/src/navigation_system/logs14/path_smoothlog14_resampled_1m.csv'
+        # return '/home/inc/ros2_ws/src/navigation_system/logs14/path_smoothlog14_resampled_1m.csv'
+        return '/home/kr-zoo/ros2_ws/src/navigation_system/navigation_system/science building/path_smoothlogscience building_resampled_1m.csv'
+
+
+
 
     @staticmethod
     def default_output_log_dir() -> str:
@@ -1095,7 +1124,7 @@ class PurePursuitController(Node):
         now = self.get_clock().now().nanoseconds / 1e9
         msg_x     = msg.pose.pose.position.x
         msg_y     = msg.pose.pose.position.y
-        msg_speed = self.get_odom_speed(msg)
+        msg_speed = self.get_encoder_speed(now)
         q = msg.pose.pose.orientation
         _, _, msg_yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
 
@@ -1103,8 +1132,8 @@ class PurePursuitController(Node):
         new_rtk_state      = self.classify_rtk_state(self.fix_quality)
         previous_rtk_state = self.rtk_state
 
-        # เก็บ raw ublox ไว้ให้ bicycle model ใช้เสมอ ไม่ว่าจะเป็นสถานะใด
-        self.ublox_speed   = msg_speed
+        # ใช้ความเร็วจาก wheel encoder (/speed_status) ให้ bicycle model
+        self.vehicle_speed = msg_speed
         self.ublox_yaw     = msg_yaw
         self.current_speed = msg_speed
 
@@ -1243,14 +1272,23 @@ class PurePursuitController(Node):
             self.stop_vehicle()
             self.throttled_warn('No valid RTK position; vehicle stopped')
 
-    @staticmethod
-    def get_odom_speed(msg: Odometry) -> float:
-        linear = msg.twist.twist.linear
-        return math.sqrt(
-            linear.x * linear.x
-            + linear.y * linear.y
-            + linear.z * linear.z
-        )
+    def speed_status_callback(self, msg: Float64) -> None:
+        self.encoder_speed = float(msg.data)
+        self.last_encoder_speed_time = self.get_clock().now().nanoseconds / 1e9
+
+    def get_encoder_speed(self, now: float) -> float:
+        if self.last_encoder_speed_time is None:
+            self.throttled_warn('Waiting for /speed_status; using 0.0 m/s')
+            return 0.0
+
+        age = now - self.last_encoder_speed_time
+        if age > self.encoder_speed_timeout:
+            self.throttled_warn(
+                f'/speed_status stale ({age:.2f}s); using 0.0 m/s'
+            )
+            return 0.0
+
+        return self.encoder_speed
 
     def get_fix_quality(self, msg: Odometry) -> int:
         try:
@@ -1284,11 +1322,11 @@ class PurePursuitController(Node):
     def predict_position_bicycle(self, dt: float) -> None:
         """Dead-reckoning via kinematic bicycle model.
 
-        ใช้ ublox_speed และ ublox_yaw โดยตรงเสมอ ไม่ว่าจะเป็นสถานะใด
+        ใช้ encoder speed จาก /speed_status และ yaw จาก ublox โดยตรง
         (FLOAT, NO_FIX หรืออื่นๆ) bicycle model คำนวณแค่ X, Y เท่านั้น
         — yaw มาจาก ublox โดยตรง ไม่มีการ integrate หรือ blend ใดๆ
         """
-        v = max(0.0, min(abs(self.ublox_speed), self.fix_speed_limit))
+        v = max(0.0, min(abs(self.vehicle_speed), self.fix_speed_limit))
 
         # yaw ใช้จาก ublox โดยตรง ไม่ integrate เอง
         self.bicycle_yaw = self.ublox_yaw
@@ -1522,7 +1560,7 @@ class PurePursuitController(Node):
             f'{self.rtk_state} bicycle model ({elapsed:.1f}s): '
             f'bx=({self.bicycle_x:.2f},{self.bicycle_y:.2f}), '
             f'byaw={math.degrees(self.bicycle_yaw):.1f} deg [from ublox], '
-            f'ublox_v={self.ublox_speed:.2f} m/s, '
+            f'encoder_v={self.vehicle_speed:.2f} m/s, '
             f'ublox_yaw={math.degrees(self.ublox_yaw):.1f} deg, '
             f'lookahead={lookahead:.2f} m, '
             f'steer_raw={math.degrees(steering_raw):.2f} deg, '
@@ -1580,7 +1618,7 @@ class PurePursuitController(Node):
         self.last_commanded_speed = speed
         self.write_output_log(speed, steering)
 
-    def get_command_speed(self) -> float:
+    def get_target_command_speed(self) -> float:
         if self.rtk_state == 'FIX':
             return min(self.target_speed, self.fix_speed_limit)
         if self.rtk_state in ('FLOAT', 'NO_FIX') and self.bicycle_active:
@@ -1589,9 +1627,33 @@ class PurePursuitController(Node):
             return min(self.target_speed, self.float_speed_limit)
         return 0.0
 
+    def get_command_speed(self) -> float:
+        """Move the speed command toward its RTK-dependent target at a safe rate."""
+        now = self.get_clock().now()
+        target_speed = self.get_target_command_speed()
+
+        if self.last_speed_command_time is None:
+            dt = self.control_period
+        else:
+            dt = (now - self.last_speed_command_time).nanoseconds / 1e9
+            # A delayed timer callback must not create one large speed step.
+            dt = self.clamp(dt, 0.0, self.control_period * 2.0)
+
+        self.last_speed_command_time = now
+        speed_error = target_speed - self.last_commanded_speed
+        if speed_error >= 0.0:
+            max_delta = max(0.0, self.max_speed_accel) * dt
+        else:
+            max_delta = max(0.0, self.max_speed_decel) * dt
+
+        return self.last_commanded_speed + self.clamp(
+            speed_error, -max_delta, max_delta
+        )
+
     def stop_vehicle(self) -> None:
         self.last_steering = 0.0
         self.last_commanded_speed = 0.0
+        self.last_speed_command_time = None
 
         if self.drive_pub is not None:
             drive_msg = AckermannDriveStamped()

@@ -1,0 +1,33 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+    - Class: rviz_default_plugins/Path
+      Color: 255; 255; 0
+      Enabled: true
+      Line Style: Lines
+      Line Width: 0.05
+      Name: Vehicle Path
+      Topic: /path
+      Value: true
+    - Class: rviz_default_plugins/Odometry
+      Enabled: true
+      Name: Fused Odometry
+      Shape:
+        Value: Arrow
+      Topic: /fused_odom
+      Value: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: odom
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+  Value: true

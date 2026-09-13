@@ -372,11 +372,17 @@ h2{font-size:28px;line-height:1.15;color:#90ee50;-webkit-text-stroke:1px #1a5200
     letter-spacing:1px;
 }
 .pin-group{
-    right:280px;
-    top:88px;
+    left:8vw;
+    right:auto;
+    top:50%;
+    transform:translateY(-50%);
     z-index:30;
+    display:grid;
+    grid-template-columns:repeat(2, 48px);
+    gap:16px 18px;
 }
 .wood-btn{
+    position:relative;
     display:flex;
     align-items:center;
     justify-content:center;
@@ -435,6 +441,23 @@ h2{font-size:28px;line-height:1.15;color:#90ee50;-webkit-text-stroke:1px #1a5200
     transform:translateY(5px) rotate(-45deg) scale(0.99);
     box-shadow:inset 0 3px 0 rgba(255,221,152,0.4),inset 0 -3px 0 rgba(75,35,12,0.34),0 3px 0 #4a260f,0 8px 16px rgba(0,0,0,0.28);
 }
+.rhino-pin,
+.lion-pin,
+.deer-pin,
+.hippo-pin{
+    left:auto;
+    right:auto;
+    top:auto;
+}
+/* ปรับตำแหน่งปุ่มแต่ละจุด: left ขยับซ้าย/ขวา, top ขยับขึ้น/ลง */
+.wood-btn.turtle-pin{left:850px;top:180px}
+.wood-btn.monkey-pin{left:640px;top:200px}
+.wood-btn.flamingo-pin{left:435px;top:5px}
+.wood-btn.hornbill-pin{left:420px;top:-65px}
+.wood-btn.pygmy-hippo-pin{left:900px;top:10px}
+.wood-btn.african-buffalo-pin{left:590px;top:-160px}
+.wood-btn.african-elephant-pin{left:840px;top:-210px}
+.wood-btn.capybara-pin{left:900px;top:-150px}
 .route-popup{
     position:absolute;
     left:50%;
@@ -446,7 +469,7 @@ h2{font-size:28px;line-height:1.15;color:#90ee50;-webkit-text-stroke:1px #1a5200
     border-radius:14px;
     background:
         repeating-linear-gradient(8deg,transparent,transparent 9px,rgba(83,39,13,0.16) 10px,transparent 17px),
-        linear-gradient(155deg,#f4bd6f,#c77735 45%,#965222);
+        linear-gradient(155deg,#a08d72,#c77735 45%,#965222);
     color:#fff7d6;
     font-family:'Mali',cursive;
     font-size:24px;
@@ -687,12 +710,13 @@ h2{font-size:28px;line-height:1.15;color:#90ee50;-webkit-text-stroke:1px #1a5200
         font-size:19px;
     }
     .pin-group{
-        right:18px;
-        top:86px;
+        left:16px;
+        right:auto;
+        top:50%;
+        transform:translateY(-50%);
         width:170px;
-        flex-direction:row;
-        flex-wrap:wrap;
-        justify-content:flex-end;
+        grid-template-columns:repeat(2, 42px);
+        justify-content:start;
         gap:10px;
     }
     .wood-btn::after{
@@ -777,20 +801,29 @@ h2{font-size:28px;line-height:1.15;color:#90ee50;-webkit-text-stroke:1px #1a5200
 
     <button class="route-popup" id="routePopup" type="button">เริ่มนำทาง</button>
     <div class="pin-group" aria-label="เลือกจุดหมาย">
-        <button class="wood-btn is-active" type="button" data-destination="การแสดงให้อาหารเสือ" data-lat="13.649913" data-lon="100.492690" aria-label="เลือกการแสดงให้อาหารเสือ">
-            <span class="pin-icon">🐾</span>
+        <button class="wood-btn turtle-pin is-active" type="button" data-destination="เต่า" data-lat="14.851164" data-lon="102.083617" aria-label="เลือกเต่า">
+            <span class="pin-icon">🐢</span>
         </button>
-        <button class="wood-btn rhino-pin" type="button" data-destination="คลับแร๊ดแรด" data-lat="13.650040" data-lon="100.492900" aria-label="เลือกคลับแร๊ดแรด">
-            <span class="pin-icon">🦏</span>
+        <button class="wood-btn rhino-pin monkey-pin" type="button" data-destination="ลิง" data-lat="14.851096" data-lon="102.081873" aria-label="เลือกลิง">
+            <span class="pin-icon">🐒</span>
         </button>
-        <button class="wood-btn lion-pin" type="button" data-destination="สิงโต" data-lat="13.650240" data-lon="100.492540" aria-label="เลือกสิงโต">
-            <span class="pin-icon">🦁</span>
+        <button class="wood-btn lion-pin flamingo-pin" type="button" data-destination="นกฟรามิโก" data-lat="14.852276" data-lon="102.080140" aria-label="เลือกนกฟรามิโก">
+            <span class="pin-icon">🦩</span>
         </button>
-        <button class="wood-btn deer-pin" type="button" data-destination="เดิ่นกวาง" data-lat="13.649710" data-lon="100.492320" aria-label="เลือกเดิ่นกวาง">
-            <span class="pin-icon">🦌</span>
+        <button class="wood-btn deer-pin hornbill-pin" type="button" data-destination="โดมนกเงือก" data-lat="14.853216" data-lon="102.080957" aria-label="เลือกโดมนกเงือก">
+            <span class="pin-icon">🕊️</span>
         </button>
-        <button class="wood-btn hippo-pin" type="button" data-destination="ฮิปโปโปเตมัส" data-lat="13.649520" data-lon="100.492820" aria-label="เลือกฮิปโปโปเตมัส">
+        <button class="wood-btn hippo-pin pygmy-hippo-pin" type="button" data-destination="ฮิปโปแคระ" data-lat="14.851707" data-lon="102.084144" aria-label="เลือกฮิปโปแคระ">
             <span class="pin-icon">🦛</span>
+        </button>
+        <button class="wood-btn african-buffalo-pin" type="button" data-destination="ควายป่าอัฟริกา" data-lat="14.853143" data-lon="102.081910" aria-label="เลือกควายป่าอัฟริกา">
+            <span class="pin-icon">🐃</span>
+        </button>
+        <button class="wood-btn african-elephant-pin" type="button" data-destination="ช้างแอฟริกา" data-lat="14.853157" data-lon="102.083921" aria-label="เลือกช้างแอฟริกา">
+            <span class="pin-icon">🐘</span>
+        </button>
+        <button class="wood-btn capybara-pin" type="button" data-destination="คาบีบาร่า" data-lat="14.852753" data-lon="102.084357" aria-label="เลือกคาบีบาร่า">
+            <span class="pin-icon">🦫</span>
         </button>
     </div>
 
@@ -967,3 +1000,5 @@ connectWebSocket();
 </script>
 </body>
 </html>
+
+

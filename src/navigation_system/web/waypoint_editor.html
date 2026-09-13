@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waypoint Editor</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a23;
+    --surface2: #1e2330;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --text-muted: #7a8299;
+    --accent: #00e5a0;
+    --accent2: #3b82f6;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --font: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .header-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0,229,160,0.1);
+    color: var(--accent);
+    border: 0.5px solid rgba(0,229,160,0.3);
+    letter-spacing: 0.08em;
+  }
+  .header-actions { margin-left: auto; display: flex; gap: 10px; }
+
+  .upload-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 0.5px solid var(--border);
+    flex-shrink: 0;
+  }
+  .upload-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border: 0.5px dashed var(--border2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    background: var(--surface2);
+  }
+  .upload-box:hover { border-color: var(--accent); background: rgba(0,229,160,0.04); }
+  .upload-box.loaded { border-color: rgba(0,229,160,0.4); border-style: solid; }
+  .upload-box input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    background: rgba(0,229,160,0.12); color: var(--accent);
+  }
+  .upload-label { font-size: 11px; color: var(--text-muted); }
+  .upload-name { font-size: 12px; color: var(--text); }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    cursor: grab;
+  }
+  #canvas-wrap.panning { cursor: grabbing; }
+  #canvas-wrap.on-point { cursor: pointer; }
+  canvas { display: block; }
+
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-left: 0.5px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-section {
+    padding: 14px 16px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .sidebar-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    border: 0.5px solid var(--border);
+  }
+  .stat-card .s-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .stat-card .s-value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .stat-card.green .s-value { color: var(--accent); }
+  .stat-card.blue .s-value  { color: var(--accent2); }
+  .stat-card.amber .s-value { color: var(--warn); }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 7px;
+    font-size: 12px;
+    color: var(--text);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .fix-counter {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .fix-pill {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .fix-pill.fix { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .fix-pill.flt { background: rgba(245,158,11,0.12); color: var(--warn); }
+
+  .hover-panel {
+    flex: 1;
+    padding: 14px 16px;
+    overflow-y: auto;
+  }
+  .hover-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .hover-title {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .hover-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 0.5px solid var(--border);
+    font-size: 12px;
+  }
+  .hover-row:last-child { border-bottom: none; }
+  .hover-key { color: var(--text-muted); }
+  .hover-val { color: var(--text); font-weight: 600; }
+  .hover-val.green { color: var(--accent); }
+  .hover-val.amber { color: var(--warn); }
+  .hover-val.blue  { color: var(--accent2); }
+
+  .fix-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .fix-badge.rtk-fix   { background: rgba(0,229,160,0.15); color: var(--accent); }
+  .fix-badge.rtk-float { background: rgba(245,158,11,0.15); color: var(--warn); }
+  .fix-badge.other     { background: rgba(255,255,255,0.08); color: var(--text-muted); }
+
+  .zoom-hint {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(13,15,20,0.8);
+    padding: 6px 10px;
+    border-radius: 6px;
+    pointer-events: none;
+    line-height: 1.6;
+  }
+
+  .btn {
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: var(--font);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .btn:hover { background: rgba(255,255,255,0.07); }
+  .btn.primary {
+    background: var(--accent);
+    color: #06251b;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .btn.primary:hover { background: #33ffbb; }
+  .btn.primary:disabled { background: var(--surface2); color: var(--text-muted); border-color: var(--border2); cursor: not-allowed; }
+
+  .no-data {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .no-data .icon { font-size: 32px; opacity: 0.3; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Waypoint Editor</h1>
+  <span class="header-badge">GPS</span>
+  <div class="header-actions">
+    <button class="btn" id="btn-fit">Fit view</button>
+    <button class="btn primary" id="btn-download" disabled>⬇ Download CSV</button>
+  </div>
+</header>
+
+<div class="upload-row">
+  <div class="upload-box" id="box-nav">
+    <input type="file" accept=".csv" id="input-nav">
+    <div class="upload-icon">📍</div>
+    <div>
+      <div class="upload-label">Waypoints CSV</div>
+      <div class="upload-name" id="name-nav">lat, lon, speed, heading, fix_quality</div>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div id="canvas-wrap">
+    <canvas id="cvs"></canvas>
+    <div class="no-data" id="no-data">
+      <span class="icon">⬆</span>
+      <span>อัพโหลด CSV เพื่อดูและแก้ไข waypoints</span>
+    </div>
+    <div class="zoom-hint">
+      Scroll = zoom &nbsp;|&nbsp; ลากพื้นที่ว่าง = pan<br>
+      ลากจุด = ย้าย waypoint &nbsp;|&nbsp; คลิกขวาที่จุด = ลบ &nbsp;|&nbsp; ดับเบิลคลิก = เพิ่มจุด
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Statistics</div>
+      <div class="stat-grid" id="stats-grid">
+        <div class="stat-card blue">
+          <div class="s-label">Total Points</div>
+          <div class="s-value" id="st-pts">—</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="s-label">Edited</div>
+          <div class="s-value" id="st-edited">—</div>
+        </div>
+        <div class="stat-card green">
+          <div class="s-label">Avg Speed</div>
+          <div class="s-value" id="st-speed-avg">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Max Speed</div>
+          <div class="s-value" id="st-speed-max">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Legend</div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--accent)"></div>
+        <span>Fix quality = 4</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:var(--warn)"></div>
+        <span>Fix quality = 5</span>
+      </div>
+      <div class="legend-row">
+        <div class="legend-dot" style="background:rgba(255,255,255,0.5)"></div>
+        <span>Other quality</span>
+      </div>
+      <div id="fix-counts" class="fix-counter"></div>
+    </div>
+
+    <div class="hover-panel" id="hover-panel">
+      <div class="hover-title">Point info</div>
+      <div class="hover-empty" id="hover-empty">
+        เอาเมาส์ไปวางบนจุด หรือลากจุดเพื่อย้ายตำแหน่ง
+      </div>
+      <div id="hover-data" style="display:none;">
+        <div class="hover-row">
+          <span class="hover-key">Index</span>
+          <span class="hover-val" id="hv-idx">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Lat</span>
+          <span class="hover-val" id="hv-lat">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Lon</span>
+          <span class="hover-val" id="hv-lon">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Speed</span>
+          <span class="hover-val green" id="hv-spd">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Heading</span>
+          <span class="hover-val blue" id="hv-hdg">—</span>
+        </div>
+        <div class="hover-row">
+          <span class="hover-key">Fix quality</span>
+          <span class="hover-val" id="hv-fix">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const wrap = document.getElementById('canvas-wrap');
+const noData = document.getElementById('no-data');
+const downloadBtn = document.getElementById('btn-download');
+
+let points = [];      // {lat, lon, x, y, speed, heading, fix_quality, edited, ...rest}
+let columns = [];
+let latKey = 'lat', lonKey = 'lon';
+let refLat = 0, refLon = 0;
+let filename = 'waypoints_edited.csv';
+
+let transform = { x: 0, y: 0, scale: 1 };
+let panning = false;
+let panStart = { x: 0, y: 0 };
+let panOrigin = { x: 0, y: 0 };
+let dragPointIndex = null;
+let hoverIndex = null;
+
+const HIT_RADIUS = 11;
+const M_PER_DEG_LAT = 110540;
+
+function metersPerDegLon(lat) {
+  return 111320 * Math.cos(lat * Math.PI / 180);
+}
+
+function projectAll() {
+  const lats = points.map(p => p.lat);
+  const lons = points.map(p => p.lon);
+  refLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  refLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+  const mLon = metersPerDegLon(refLat) || 1;
+  points.forEach(p => {
+    p.x = (p.lon - refLon) * mLon;
+    p.y = (p.lat - refLat) * M_PER_DEG_LAT;
+  });
+}
+
+function worldToLatLon(x, y) {
+  const mLon = metersPerDegLon(refLat) || 1;
+  return {
+    lat: refLat + y / M_PER_DEG_LAT,
+    lon: refLon + x / mLon,
+  };
+}
+
+function parseCSV(text) {
+  const result = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
+  const fields = result.meta.fields || [];
+  latKey = fields.find(f => /^lat/i.test(f)) || 'lat';
+  lonKey = fields.find(f => /^lon|^lng/i.test(f)) || 'lon';
+  columns = fields;
+  return result.data
+    .filter(r => r[latKey] != null && r[lonKey] != null && !isNaN(r[latKey]) && !isNaN(r[lonKey]))
+    .map(r => {
+      const p = Object.assign({}, r);
+      p.lat = parseFloat(r[latKey]);
+      p.lon = parseFloat(r[lonKey]);
+      p.speed = r.speed != null ? parseFloat(r.speed) : null;
+      p.heading = r.heading != null ? parseFloat(r.heading) : null;
+      p.fix_quality = r.fix_quality != null ? parseFloat(r.fix_quality) : null;
+      p.edited = false;
+      return p;
+    });
+}
+
+function getBounds() {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function fitView() {
+  if (points.length === 0) return;
+  const b = getBounds();
+  const pw = wrap.clientWidth - 70;
+  const ph = wrap.clientHeight - 70;
+  const dw = (b.maxX - b.minX) || 1;
+  const dh = (b.maxY - b.minY) || 1;
+  const scale = Math.min(pw / dw, ph / dh, 4000);
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  transform.scale = scale;
+  transform.x = wrap.clientWidth / 2 - cx * scale;
+  transform.y = wrap.clientHeight / 2 + cy * scale;
+  render();
+}
+
+function toScreen(x, y) {
+  return [x * transform.scale + transform.x, -y * transform.scale + transform.y];
+}
+function toWorld(sx, sy) {
+  return [(sx - transform.x) / transform.scale, -(sy - transform.y) / transform.scale];
+}
+
+function fixColor(q) {
+  if (q === 4) return '#00e5a0';
+  if (q === 5) return '#f59e0b';
+  return 'rgba(255,255,255,0.5)';
+}
+function fixLabel(q) {
+  if (q === 4) return 'Fix (4)';
+  if (q === 5) return 'Float (5)';
+  return q != null ? 'Quality ' + q : '—';
+}
+
+function render() {
+  cvs.width = wrap.clientWidth;
+  cvs.height = wrap.clientHeight;
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  if (points.length === 0) return;
+
+  // connecting line
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const [sx, sy] = toScreen(p.x, p.y);
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  });
+  ctx.stroke();
+
+  // points
+  points.forEach((p, i) => {
+    const [sx, sy] = toScreen(p.x, p.y);
+    const r = (i === hoverIndex || i === dragPointIndex) ? 5 : 3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = fixColor(p.fix_quality);
+    ctx.fill();
+    if (p.edited) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, r + 2.5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    if (i === hoverIndex || i === dragPointIndex) {
+      ctx.beginPath();
+      ctx.arc(sx, sy, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+}
+
+function findNearest(mx, my) {
+  if (points.length === 0) return null;
+  let best = null, bestD = Infinity;
+  points.forEach((p, i) => {
+    const [sx, sy] = toScreen(p.x, p.y);
+    const d = Math.hypot(sx - mx, sy - my);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (bestD > HIT_RADIUS) return null;
+  return best;
+}
+
+function updateStats() {
+  document.getElementById('st-pts').textContent = points.length.toLocaleString();
+  document.getElementById('st-edited').textContent = points.filter(p => p.edited).length.toLocaleString();
+  const speeds = points.map(p => p.speed).filter(v => v != null && !isNaN(v));
+  if (speeds.length) {
+    const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+    document.getElementById('st-speed-avg').textContent = avg.toFixed(3);
+    document.getElementById('st-speed-max').textContent = Math.max(...speeds).toFixed(3);
+  } else {
+    document.getElementById('st-speed-avg').textContent = '—';
+    document.getElementById('st-speed-max').textContent = '—';
+  }
+  const fixCount = points.filter(p => p.fix_quality === 4).length;
+  const fltCount = points.filter(p => p.fix_quality === 5).length;
+  document.getElementById('fix-counts').innerHTML =
+    `<span class="fix-pill fix">Fix: ${fixCount.toLocaleString()}</span>` +
+    `<span class="fix-pill flt">Float: ${fltCount.toLocaleString()}</span>`;
+}
+
+function showHover(idx) {
+  hoverIndex = idx;
+  if (idx === null) {
+    document.getElementById('hover-empty').style.display = 'block';
+    document.getElementById('hover-data').style.display = 'none';
+    return;
+  }
+  const p = points[idx];
+  document.getElementById('hover-empty').style.display = 'none';
+  document.getElementById('hover-data').style.display = 'block';
+  document.getElementById('hv-idx').textContent = '#' + idx;
+  document.getElementById('hv-lat').textContent = p.lat.toFixed(6);
+  document.getElementById('hv-lon').textContent = p.lon.toFixed(6);
+  document.getElementById('hv-spd').textContent = p.speed != null ? p.speed.toFixed(3) + ' m/s' : '—';
+  document.getElementById('hv-hdg').textContent = p.heading != null ? p.heading.toFixed(1) + '°' : '—';
+  const label = fixLabel(p.fix_quality);
+  const cls = p.fix_quality === 4 ? 'rtk-fix' : p.fix_quality === 5 ? 'rtk-float' : 'other';
+  document.getElementById('hv-fix').innerHTML = `<span class="fix-badge ${cls}">${label}</span>`;
+}
+
+function loadPoints(rows, name) {
+  points = rows;
+  filename = name.replace(/\.csv$/i, '') + '_edited.csv';
+  projectAll();
+  noData.style.display = 'none';
+  downloadBtn.disabled = points.length === 0;
+  updateStats();
+  fitView();
+}
+
+document.getElementById('input-nav').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const rows = parseCSV(ev.target.result);
+    document.getElementById('name-nav').textContent = file.name + '  (' + rows.length + ' pts)';
+    document.getElementById('box-nav').classList.add('loaded');
+    loadPoints(rows, file.name);
+  };
+  reader.readAsText(file);
+});
+
+// ---- Mouse interaction ----
+wrap.addEventListener('mousedown', e => {
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const idx = findNearest(mx, my);
+  if (idx !== null) {
+    dragPointIndex = idx;
+    wrap.classList.add('on-point');
+  } else {
+    panning = true;
+    panStart = { x: mx, y: my };
+    panOrigin = { ...transform };
+    wrap.classList.add('panning');
+  }
+});
+
+wrap.addEventListener('mousemove', e => {
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+  if (dragPointIndex !== null) {
+    const [wx, wy] = toWorld(mx, my);
+    const p = points[dragPointIndex];
+    p.x = wx; p.y = wy;
+    const ll = worldToLatLon(wx, wy);
+    p.lat = ll.lat; p.lon = ll.lon;
+    p.edited = true;
+    showHover(dragPointIndex);
+    updateStats();
+    render();
+    return;
+  }
+
+  if (panning) {
+    transform.x = panOrigin.x + (mx - panStart.x);
+    transform.y = panOrigin.y + (my - panStart.y);
+    render();
+    return;
+  }
+
+  const idx = findNearest(mx, my);
+  wrap.classList.toggle('on-point', idx !== null);
+  if (idx !== hoverIndex) {
+    showHover(idx);
+    render();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  dragPointIndex = null;
+  panning = false;
+  wrap.classList.remove('panning', 'on-point');
+});
+
+wrap.addEventListener('mouseleave', () => {
+  if (!panning && dragPointIndex === null) {
+    showHover(null);
+    render();
+  }
+});
+
+wrap.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const idx = findNearest(mx, my);
+  if (idx !== null) {
+    points.splice(idx, 1);
+    hoverIndex = null;
+    showHover(null);
+    updateStats();
+    render();
+  }
+});
+
+wrap.addEventListener('dblclick', e => {
+  if (points.length === 0) return;
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const [wx, wy] = toWorld(mx, my);
+  const ll = worldToLatLon(wx, wy);
+  const last = points[points.length - 1];
+  const newPoint = Object.assign({}, last, {
+    lat: ll.lat, lon: ll.lon, x: wx, y: wy, edited: true,
+  });
+  points.push(newPoint);
+  updateStats();
+  render();
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = wrap.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  const newScale = Math.max(0.01, Math.min(20000, transform.scale * factor));
+  transform.x = mx - (mx - transform.x) * (newScale / transform.scale);
+  transform.y = my - (my - transform.y) * (newScale / transform.scale);
+  transform.scale = newScale;
+  render();
+}, { passive: false });
+
+document.getElementById('btn-fit').addEventListener('click', fitView);
+
+downloadBtn.addEventListener('click', () => {
+  if (points.length === 0) return;
+  const cols = columns.length ? columns.slice() : ['lat', 'lon', 'speed', 'heading', 'fix_quality'];
+  if (!cols.includes(latKey)) cols.unshift(latKey);
+  if (!cols.includes(lonKey)) cols.splice(1, 0, lonKey);
+
+  const rows = points.map(p => {
+    const row = {};
+    cols.forEach(c => {
+      if (c === latKey) row[c] = p.lat;
+      else if (c === lonKey) row[c] = p.lon;
+      else row[c] = (p[c] !== undefined && p[c] !== null) ? p[c] : '';
+    });
+    return row;
+  });
+
+  const csv = Papa.unparse({ fields: cols, data: rows.map(r => cols.map(c => r[c])) });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+const ro = new ResizeObserver(() => render());
+ro.observe(wrap);
+render();
+</script>
+</body>
+</html>

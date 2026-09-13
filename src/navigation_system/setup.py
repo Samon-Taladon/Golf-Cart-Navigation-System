@@ -134,6 +134,10 @@ setup(
             'imu_node = navigation_system.imu:main',
             'steering_feedback_node = navigation_system.steering_feedback_node:main',
             'keepwaypointnew = navigation_system.keepwaypointnew:main',
+            'KR_Zoo = navigation_system.KR_Zoo:main',
+            'enhanced_gnss_publisher_forweb = navigation_system.enhanced_gnss_publisher_forweb:main',
+            'purepursuit_forweb = navigation_system.purepursuit_forweb:main',
+            'web_navigation_bridge_forweb = navigation_system.web_navigation_bridge_forweb:main',
         ],
     },
 )

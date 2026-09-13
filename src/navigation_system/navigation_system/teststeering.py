@@ -202,7 +202,7 @@ if __name__ == '__main__':
 #         self.current_rad += step
 
 #         twist = Twist()
-#         twist.linear.x = 0.5
+#         twist.linear.x = 1.5
 #         twist.angular.z = self.current_rad
 
 #         self.publisher_.publish(twist)
